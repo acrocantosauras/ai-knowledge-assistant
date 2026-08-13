@@ -1,0 +1,9 @@
+services:
+  api:
+    build:
+      context: .
+    environment:
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+    ports:
+      - "${APP_PORT:-8000}:8000"
