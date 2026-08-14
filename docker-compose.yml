@@ -3,7 +3,35 @@ services:
     build:
       context: .
     environment:
+      APP_DATABASE_URL: ${APP_DATABASE_URL:-postgresql+asyncpg://ai_knowledge_user:ai_knowledge_password@postgres:5432/ai_knowledge_assistant}
       APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
     ports:
       - "${APP_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai_knowledge_assistant}
+      POSTGRES_USER: ${POSTGRES_USER:-ai_knowledge_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_knowledge_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

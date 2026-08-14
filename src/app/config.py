@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     app_version: str = get_app_version()
     environment: Literal["development", "test", "staging", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    database_url: str = (
+        "postgresql+asyncpg://ai_knowledge_user:ai_knowledge_password"
+        "@localhost:5432/ai_knowledge_assistant"
+    )
+    test_database_url: str = (
+        "postgresql+asyncpg://ai_knowledge_user:ai_knowledge_password"
+        "@localhost:5432/ai_knowledge_assistant_test"
+    )
+    database_echo: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

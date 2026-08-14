@@ -1,0 +1,1 @@
+CREATE DATABASE ai_knowledge_assistant_test;
