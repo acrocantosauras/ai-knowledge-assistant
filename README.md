@@ -336,6 +336,80 @@ docker compose exec api alembic upgrade head
 docker compose exec api alembic downgrade -1
 ```
 
+## Deployment Smoke Test
+
+A repeatable end-to-end smoke test verifies the running Docker production stack against all critical workflows.
+
+### Usage
+
+```bash
+# Against the default URL (http://localhost:8000)
+./scripts/smoke-test.sh
+
+# Against a custom URL
+./scripts/smoke-test.sh https://staging.example.com
+```
+
+### What it tests
+
+| # | Check | Endpoint |
+|---|-------|----------|
+| 1 | Container health | `docker compose ps` |
+| 2 | Liveness probe | `GET /health` |
+| 3 | Readiness probe | `GET /health/ready` |
+| 4 | Metrics endpoint | `GET /metrics` |
+| 5 | Frontend root | `GET /` |
+| 6 | SPA routing | `GET /documents` |
+| 7 | Static assets | JS/CSS bundles |
+| 8 | User registration | `POST /api/v1/auth/register` |
+| 9 | Login (JWT) | `POST /api/v1/auth/login` |
+| 10 | Authenticated profile | `GET /api/v1/users/me/profile` |
+| 11 | Document upload | `POST /api/v1/documents/upload` |
+| 12 | Document list | `GET /api/v1/documents/` |
+| 13 | Document get | `GET /api/v1/documents/{id}` |
+| 14 | RAG search | `POST /api/v1/rag/search` |
+| 15 | RAG ask | `POST /api/v1/rag/ask` |
+| 16 | QA ask | `POST /api/v1/qa/ask` |
+| 17 | QA stream | `POST /api/v1/qa/ask/stream` |
+| 18 | Conversations list | `GET /api/v1/conversations/` |
+| 19 | Conversation get | `GET /api/v1/conversations/{id}` |
+| 20 | Preferences get | `GET /api/v1/users/me/preferences` |
+| 21 | Preferences update | `PATCH /api/v1/users/me/preferences` |
+| 22 | Document cleanup | `DELETE /api/v1/documents/{id}` |
+
+### Requirements
+
+- `bash` and `curl`
+- `docker compose` (optional, for container health checks)
+- The application stack must be running and reachable
+
+### Exit codes
+
+- `0` — All checks passed
+- `1` — One or more critical checks failed
+
+### CI/CD integration
+
+```bash
+# Start the stack
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+# Wait for health check
+until curl -sf http://localhost:8000/health/ready > /dev/null; do
+  echo "Waiting for API..."
+  sleep 2
+done
+
+# Run smoke test
+./scripts/smoke-test.sh
+SMOKE_EXIT=$?
+
+# Cleanup
+docker compose down
+
+exit $SMOKE_EXIT
+```
+
 ## Monitoring
 
 ### Prometheus
