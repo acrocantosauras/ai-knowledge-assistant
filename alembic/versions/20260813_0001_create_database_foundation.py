@@ -166,6 +166,7 @@ def upgrade() -> None:
         sa.Column("embedding_model", sa.String(length=255), nullable=False),
         sa.Column("embedding_dimension", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["chunk_id"], ["document_chunks.id"], ondelete="CASCADE"
         ),

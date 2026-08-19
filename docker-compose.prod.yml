@@ -1,0 +1,23 @@
+# Production override — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Changes from base compose:
+#   1. Removes exposed Postgres/Redis ports (internal only)
+#   2. Sets production environment with correct container URLs
+#   3. Uses restart policy
+
+services:
+  api:
+    environment:
+      APP_ENVIRONMENT: production
+      APP_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ai_knowledge_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_knowledge_assistant}
+      APP_REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
+
+  postgres:
+    ports: !reset []
+    restart: unless-stopped
+
+  redis:
+    ports: !reset []
+    restart: unless-stopped

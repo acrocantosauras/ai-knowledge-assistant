@@ -4,10 +4,11 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, JsonDict, TimestampMixin
 
 if TYPE_CHECKING:
     from app.db.models.conversation import Conversation
@@ -24,7 +25,14 @@ class User(TimestampMixin, Base):
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
     display_name: Mapped[str | None] = mapped_column(String(255))
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    preferences: Mapped[JsonDict] = mapped_column(
+        "preferences",
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
 
     documents: Mapped[list[Document]] = relationship(
         back_populates="user",

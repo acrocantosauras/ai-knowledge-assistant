@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -9,13 +8,13 @@ from sqlalchemy import ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
+from app.db.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.db.models.document_chunk import DocumentChunk
 
 
-class ChunkEmbedding(Base):
+class ChunkEmbedding(TimestampMixin, Base):
     __tablename__ = "chunk_embeddings"
     __table_args__ = (
         UniqueConstraint(
@@ -44,9 +43,5 @@ class ChunkEmbedding(Base):
     embedding: Mapped[list[float]] = mapped_column(Vector, nullable=False)
     embedding_model: Mapped[str] = mapped_column(String(255), nullable=False)
     embedding_dimension: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )
 
     chunk: Mapped[DocumentChunk] = relationship(back_populates="embeddings")

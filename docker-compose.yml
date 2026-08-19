@@ -3,14 +3,27 @@ services:
     build:
       context: .
     environment:
-      APP_DATABASE_URL: ${APP_DATABASE_URL:-postgresql+asyncpg://ai_knowledge_user:ai_knowledge_password@postgres:5432/ai_knowledge_assistant}
+      APP_DATABASE_URL: postgresql+asyncpg://ai_knowledge_user:ai_knowledge_password@postgres:5432/ai_knowledge_assistant
       APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      APP_JWT_SECRET_KEY: ${APP_JWT_SECRET_KEY:-change-me-to-a-random-secret-key}
+      APP_EMBEDDING_PROVIDER: ${APP_EMBEDDING_PROVIDER:-mock}
+      APP_LLM_PROVIDER: ${APP_LLM_PROVIDER:-mock}
+      APP_CORS_ORIGINS: ${APP_CORS_ORIGINS:-["http://localhost:3000","http://localhost:5173"]}
+      APP_REDIS_URL: ${APP_REDIS_URL:-redis://redis:6379/0}
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -33,5 +46,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
+  redis_data:

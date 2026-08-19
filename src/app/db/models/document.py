@@ -38,6 +38,7 @@ class Document(TimestampMixin, Base):
     content_type: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
     checksum: Mapped[str | None] = mapped_column(String(128))
+    content: Mapped[str | None] = mapped_column(Text)
     document_metadata: Mapped[JsonDict] = mapped_column(
         "metadata",
         JSONB,
@@ -51,3 +52,8 @@ class Document(TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="DocumentChunk.chunk_index",
     )
+
+    @property
+    def content_excerpt(self) -> str:
+        """Return the excerpt from document metadata, or empty string."""
+        return self.document_metadata.get("excerpt", "")
