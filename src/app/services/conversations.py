@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models.conversation import Conversation
@@ -215,4 +215,22 @@ def _generate_simple_title(
     if len(title) > max_length:
         title = title[:max_length - 3] + "..."
     return title or "New Conversation"
+
+
+async def count_messages_for_conversations(
+    session: Session,
+    conversation_ids: list[UUID],
+) -> dict[UUID, int]:
+    """Count messages per conversation in a single query (avoids N+1)."""
+    if not conversation_ids:
+        return {}
+    result = await session.execute(
+        select(
+            Message.conversation_id,
+            func.count(Message.id),
+        )
+        .where(Message.conversation_id.in_(conversation_ids))
+        .group_by(Message.conversation_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
 

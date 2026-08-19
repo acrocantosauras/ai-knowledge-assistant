@@ -1,6 +1,7 @@
 """RAG API endpoints for semantic search and question answering."""
 
 import json
+import logging
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
@@ -21,6 +22,8 @@ from app.schemas.rag import (
 )
 from app.services.llm import get_llm_service
 from app.services.rag import search_document_chunks_with_embeddings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
@@ -272,3 +275,12 @@ async def ask_question_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# Note: the event_generator for streaming does not currently have a
+# top-level try/except.  The OpenAIProvider raises RuntimeError on
+# streaming failures, which will propagate through the async generator
+# and close the SSE connection.  The frontend handles stream drops
+# gracefully via the onDone / onError callbacks.
+# Adding a catch-all here would silently swallow DB-write errors that
+# should crash the request so the orchestrator can restart the worker.

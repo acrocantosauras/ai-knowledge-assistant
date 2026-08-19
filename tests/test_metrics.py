@@ -220,3 +220,60 @@ def test_rag_search_increments_counter() -> None:
     body = response.text
     assert 'rag_search_total' in body
     assert 'rag_chunks_returned' in body
+
+
+def test_qa_ask_counter_has_provider_label() -> None:
+    """qa_questions_total should include a provider label."""
+    client = TestClient(create_app())
+    token = _register_and_login(client, "metrics-qa-label@example.com")
+
+    client.post(
+        "/api/v1/qa/ask",
+        json={"question": "test question"},
+        headers=_auth(token),
+    )
+
+    response = client.get("/metrics")
+    body = response.text
+    # The mock provider should be recorded
+    assert 'provider="mock"' in body
+
+
+def test_conversation_counter_has_user_id_label() -> None:
+    """conversations_created_total should include a user_id label."""
+    client = TestClient(create_app())
+    token = _register_and_login(client, "metrics-conv-label@example.com")
+
+    client.post(
+        "/api/v1/conversations/",
+        json={"title": "Label Test"},
+        headers=_auth(token),
+    )
+
+    response = client.get("/metrics")
+    body = response.text
+    assert 'conversations_created_total' in body
+    assert 'user_id=' in body
+
+
+def test_metrics_endpoint_no_cardinality_explosion() -> None:
+    """The /metrics endpoint should not produce unbounded label values.
+
+    All endpoint labels should be normalised (path params collapsed).
+    """
+    client = TestClient(create_app())
+    client.get("/health")
+    client.get("/health/ready")
+
+    # Register a user and make a request with a UUID in the path
+    token = _register_and_login(client, "metrics-card@example.com")
+    client.get(
+        "/api/v1/conversations/00000000-0000-0000-0000-000000000001",
+        headers=_auth(token),
+    )
+
+    response = client.get("/metrics")
+    body = response.text
+    # UUID should be normalised to {id}
+    assert '00000000-0000-0000-0000-000000000001' not in body
+    assert '{id}' in body

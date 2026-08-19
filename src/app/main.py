@@ -3,8 +3,9 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -61,11 +62,12 @@ async def _verify_database_connection() -> None:
             return
         except Exception as exc:  # noqa: BLE001
             last_error = exc
+            # Do NOT log the raw exception — it may contain connection
+            # strings, hostnames, or credentials.
             logger.warning(
-                "Database connection attempt %d/%d failed: %s",
+                "Database connection attempt %d/%d failed",
                 attempt,
                 _DB_STARTUP_RETRIES,
-                exc,
             )
             if attempt < _DB_STARTUP_RETRIES:
                 await asyncio.sleep(_DB_STARTUP_RETRY_DELAY)
@@ -163,14 +165,74 @@ def create_app() -> FastAPI:
     app.include_router(rag_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
 
-    # Serve frontend static files if they exist
-    static_dir = Path(__file__).parent.parent.parent / "static"
-    if static_dir.is_dir():
-        app.mount(
-            "/static",
-            StaticFiles(directory=str(static_dir)),
-            name="static",
+    # Global exception handler — prevents raw stack traces from
+    # leaking to API clients for truly unexpected errors.
+    _global_logger = logging.getLogger(__name__)
+
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(
+        request: Request, exc: Exception,
+    ) -> JSONResponse:
+        _global_logger.exception(
+            "Unhandled exception on %s %s",
+            request.method,
+            request.url.path,
         )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+
+    # Serve frontend static files if they exist.
+    # Vite generates absolute asset paths (/assets/...), so the assets
+    # directory must be mounted at the root — not under /static.
+    # In Docker the package is installed site-wide, so the relative path
+    # from __file__ doesn't point to /app/static.  Try the project-root
+    # path first (local dev), fall back to /app/static (container).
+    static_dir = Path(__file__).parent.parent.parent / "static"
+    if not static_dir.is_dir():
+        static_dir = Path("/app/static")
+    if static_dir.is_dir():
+        from fastapi.responses import FileResponse
+
+        # Serve JS/CSS assets
+        assets_dir = static_dir / "assets"
+        if assets_dir.is_dir():
+            app.mount(
+                "/assets",
+                StaticFiles(directory=str(assets_dir)),
+                name="static-assets",
+            )
+
+        # Serve favicon and icons
+        for icon_name in ("favicon.svg", "icons.svg"):
+            icon_path = static_dir / icon_name
+            if icon_path.is_file():
+
+                def _make_icon_response(p: Path = icon_path) -> FileResponse:
+                    return FileResponse(str(p))
+
+                app.add_api_route(
+                    f"/{icon_name}",
+                    _make_icon_response,
+                    methods=["GET"],
+                    include_in_schema=False,
+                )
+
+        # SPA fallback — serve index.html for all unmatched routes so
+        # that client-side routing (React Router) works correctly.
+        index_file = static_dir / "index.html"
+        if index_file.is_file():
+
+            async def _spa_fallback() -> FileResponse:
+                return FileResponse(str(index_file))
+
+            app.add_api_route(
+                "/{full_path:path}",
+                _spa_fallback,
+                methods=["GET"],
+                include_in_schema=False,
+            )
 
     return app
 

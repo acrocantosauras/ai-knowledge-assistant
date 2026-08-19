@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -303,17 +306,13 @@ class OpenAIProvider(BaseLLMProvider):
                 if delta and delta.content:
                     yield StreamingChunk(content=delta.content)
             yield StreamingChunk(content="", is_final=True)
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(f"OpenAI streaming failed: {exc}") from exc
+        except Exception:  # noqa: BLE001
+            logger.exception("OpenAI streaming failed")
+            raise RuntimeError("LLM streaming failed") from None
 
     async def generate_with_context_stream(
-        self,
-        system_prompt: str,
-        user_message: str,
-        context: list[str] | None = None,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        **kwargs: Any,
+        self, system_prompt: str, user_message: str, context: list[str] | None = None,
+        temperature: float | None = None, max_tokens: int | None = None, **kwargs: Any,
     ) -> AsyncGenerator[StreamingChunk, None]:
         """Generate streaming text with context using OpenAI API."""
         try:
@@ -355,8 +354,9 @@ class OpenAIProvider(BaseLLMProvider):
                 if delta and delta.content:
                     yield StreamingChunk(content=delta.content)
             yield StreamingChunk(content="", is_final=True)
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(f"OpenAI streaming failed: {exc}") from exc
+        except Exception:  # noqa: BLE001
+            logger.exception("OpenAI streaming with context failed")
+            raise RuntimeError("LLM streaming failed") from None
 
 
 class LLMService:
@@ -377,7 +377,10 @@ class LLMService:
         """Create the appropriate LLM provider based on settings."""
         if self.settings.llm_provider == "openai":
             return OpenAIProvider()
-        return MockProvider()
+        if self.settings.llm_provider == "mock":
+            return MockProvider()
+        msg = f"Unsupported LLM provider: {self.settings.llm_provider!r}"
+        raise ValueError(msg)
 
     @property
     def model_name(self) -> str:

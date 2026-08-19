@@ -46,6 +46,10 @@ async function request<T>(
       ...(opts.headers as Record<string, string>),
     },
   });
+  if (res.status === 401) {
+    // Token expired or invalid — clear it so the app redirects to login
+    localStorage.removeItem("token");
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(body.detail || `Request failed (${res.status})`);
@@ -108,6 +112,9 @@ export async function uploadDocument(file: File): Promise<Document> {
     headers: authHeaders(),
     body: form,
   });
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(body.detail || `Upload failed (${res.status})`);
@@ -198,6 +205,9 @@ export async function askQuestionStream(
     signal: combinedSignal,
   });
 
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(body.detail || `Stream failed (${res.status})`);

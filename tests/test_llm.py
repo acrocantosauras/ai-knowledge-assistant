@@ -2,11 +2,15 @@
 
 
 import pytest
+from pydantic import ValidationError
 
+from app.config import Settings
 from app.services.llm import (
     BaseLLMProvider,
     LLMResponse,
+    LLMService,
     MockProvider,
+    OpenAIProvider,
     StreamingChunk,
     get_llm_provider,
     get_llm_service,
@@ -184,3 +188,63 @@ class TestLLMService:
         service = get_llm_service()
         with pytest.raises(ValueError, match="User message cannot be empty"):
             await service.generate_with_context("sys", "")
+
+
+class TestLLMProviderSelection:
+    """Tests for explicit LLM provider selection."""
+
+    @pytest.fixture(autouse=True)
+    def reset_singleton(self) -> None:
+        """Reset singleton before each test."""
+        import app.services.llm as llm_module
+        llm_module._llm_service = None
+        yield
+        llm_module._llm_service = None
+
+    def test_mock_provider_selected(self) -> None:
+        """llm_provider='mock' selects MockProvider."""
+        settings = Settings(llm_provider="mock")
+        import app.services.llm as llm_module
+        llm_module._llm_service = None
+        service = LLMService()
+        service.settings = settings
+        provider = service._create_provider()
+        assert isinstance(provider, MockProvider)
+
+    def test_openai_provider_selected(self) -> None:
+        """llm_provider='openai' selects OpenAIProvider."""
+        settings = Settings(llm_provider="openai")
+        import app.services.llm as llm_module
+        llm_module._llm_service = None
+        service = LLMService()
+        service.settings = settings
+        provider = service._create_provider()
+        assert isinstance(provider, OpenAIProvider)
+
+    def test_invalid_llm_provider_rejected(self) -> None:
+        """Invalid LLM provider values are rejected by settings validation."""
+        with pytest.raises(ValidationError):
+            Settings(llm_provider="local")
+
+    def test_invalid_llm_provider_another_value_rejected(self) -> None:
+        """An arbitrary string is rejected as LLM provider."""
+        with pytest.raises(ValidationError):
+            Settings(llm_provider="ollama")
+
+
+class TestEmbeddingProviderStillSupportsAll:
+    """Verify embedding_provider still accepts openai/local/mock."""
+
+    @pytest.mark.parametrize(
+        "provider",
+        ["openai", "local", "mock"],
+    )
+    def test_embedding_provider_accepts_valid_values(self, provider: str) -> None:
+        """embedding_provider accepts openai, local, and mock."""
+        settings = Settings(embedding_provider=provider)
+        assert settings.embedding_provider == provider
+
+    def test_embedding_provider_rejects_invalid(self) -> None:
+        """embedding_provider rejects unknown values."""
+        with pytest.raises(ValidationError):
+            Settings(embedding_provider="invalid")

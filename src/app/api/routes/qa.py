@@ -1,5 +1,6 @@
 """QA API endpoints for question answering."""
 
+import logging
 import time
 from collections.abc import AsyncGenerator
 from typing import Annotated
@@ -17,6 +18,8 @@ from app.schemas.qa import QuestionRequest, QuestionResponse
 from app.schemas.qa import StreamingResponse as StreamingResponseSchema
 from app.services import conversations as conversation_service
 from app.services.qa import ask_question, ask_question_stream
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/qa", tags=["qa"])
 
@@ -236,8 +239,12 @@ async def ask_question_stream_endpoint(
                             time.monotonic() - stream_start_time
                         )
             
-        except Exception as e:
-            error_data = StreamingResponseSchema(type="error", error=str(e))
+        except Exception:  # noqa: BLE001
+            logger.exception("Streaming QA error for user %s", current_user.id)
+            error_data = StreamingResponseSchema(
+                type="error",
+                error="An internal error occurred. Please try again.",
+            )
             yield f"data: {error_data.model_dump_json()}\n\n"
     
     return StreamingResponse(

@@ -18,6 +18,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [answerSources, setAnswerSources] = useState<Source[]>([]);
   const [streamingContent, setStreamingContent] = useState("");
+  const [chatError, setChatError] = useState("");
   const messagesEnd = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -26,7 +27,9 @@ export default function ChatPage() {
       const data = await listConversations();
       setConversations(data.conversations);
     } catch (err) {
-      console.error("Failed to load conversations:", err);
+      setChatError(
+        err instanceof Error ? err.message : "Failed to load conversations",
+      );
     }
   }, []);
 
@@ -40,12 +43,15 @@ export default function ChatPage() {
 
   const selectConversation = useCallback(async (id: string) => {
     setActiveId(id);
+    setChatError("");
     try {
       const conv = await getConversation(id);
       setMessages(conv.messages);
       setAnswerSources([]);
     } catch (err) {
-      console.error("Failed to load conversation:", err);
+      setChatError(
+        err instanceof Error ? err.message : "Failed to load conversation",
+      );
       setMessages([]);
     }
   }, []);
@@ -72,6 +78,7 @@ export default function ChatPage() {
     setLoading(true);
     setAnswerSources([]);
     setStreamingContent("");
+    setChatError("");
 
     // Cancel any previous stream
     abortControllerRef.current?.abort();
@@ -176,7 +183,9 @@ export default function ChatPage() {
       if (activeId === id) handleNew();
       loadConversations();
     } catch (err) {
-      console.error("Failed to delete conversation:", err);
+      setChatError(
+        err instanceof Error ? err.message : "Failed to delete conversation",
+      );
     }
   };
 
@@ -197,6 +206,20 @@ export default function ChatPage() {
           </button>
         </div>
         <div style={{ overflowY: "auto", flex: 1 }}>
+          {chatError && (
+            <div
+              style={{
+                padding: "0.5rem 0.75rem",
+                background: "#fef2f2",
+                color: "#dc2626",
+                fontSize: "0.75rem",
+                cursor: "pointer",
+              }}
+              onClick={() => setChatError("")}
+            >
+              {chatError}
+            </div>
+          )}
           {conversations.map((c) => (
             <div
               key={c.id}

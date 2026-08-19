@@ -4,6 +4,7 @@
 - GET /health/ready  — Readiness probe (verifies database connectivity)
 """
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
@@ -13,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db_session
 from app.config import Settings, get_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["system"])
 
@@ -49,8 +52,11 @@ async def readiness_check(
         result = await session.execute(text("SELECT 1"))
         result.scalar()
         checks["database"] = "ok"
-    except Exception as exc:  # noqa: BLE001
-        checks["database"] = f"error: {exc}"
+    except Exception:  # noqa: BLE001
+        logger.exception("Readiness check: database unreachable")
+        # Never expose raw exception details — they may contain
+        # connection strings, hostnames, or credentials.
+        checks["database"] = "error: connection failed"
         all_ok = False
 
     # --- Redis check (only if configured) ---
@@ -63,7 +69,12 @@ async def readiness_check(
         elif redis_health["status"] == "skipped":
             checks["redis"] = "skipped"
         else:
-            checks["redis"] = f"error: {redis_health.get('error', 'unknown')}"
+            # Never expose raw error details from Redis
+            logger.warning(
+                "Readiness check: Redis unreachable: %s",
+                redis_health.get("error", "unknown"),
+            )
+            checks["redis"] = "error: connection failed"
             all_ok = False
 
     response_status = (

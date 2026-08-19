@@ -71,13 +71,18 @@ async def list_conversations(
         offset=offset,
     )
 
+    # Batch-count messages for all conversations (avoids N+1 queries)
+    conv_ids = [conv.id for conv in conversations]
+    message_counts = (
+        await conversation_service.count_messages_for_conversations(
+            session=db, conversation_ids=conv_ids,
+        )
+        if conv_ids
+        else {}
+    )
+
     conversation_responses = []
     for conv in conversations:
-        messages = await conversation_service.get_conversation_messages(
-            session=db,
-            conversation_id=conv.id,
-            user_id=current_user.id,
-        )
         conversation_responses.append(
             ConversationResponse(
                 id=conv.id,
@@ -87,7 +92,7 @@ async def list_conversations(
                 metadata=conv.conversation_metadata,
                 created_at=conv.created_at,
                 updated_at=conv.updated_at,
-                message_count=len(messages),
+                message_count=message_counts.get(conv.id, 0),
             )
         )
 

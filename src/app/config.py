@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = 100
 
     # LLM configuration
-    llm_provider: Literal["openai", "local", "mock"] = "mock"
+    llm_provider: Literal["openai", "mock"] = "mock"
     llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.7
     llm_max_tokens: int = 1024

@@ -104,7 +104,7 @@ docker compose up --build
 | `APP_OPENAI_API_KEY` | — | OpenAI API key (required if provider=openai) |
 | `APP_CHUNK_SIZE` | `500` | Text chunk size in characters |
 | `APP_CHUNK_OVERLAP` | `100` | Overlap between chunks |
-| `APP_LLM_PROVIDER` | `mock` | `openai`, `local`, or `mock` |
+| `APP_LLM_PROVIDER` | `mock` | `openai` or `mock` |
 | `APP_LLM_MODEL` | `gpt-4o-mini` | LLM model name |
 | `APP_LLM_TEMPERATURE` | `0.7` | LLM temperature |
 | `APP_LLM_MAX_TOKENS` | `1024` | Max tokens in LLM response |
@@ -136,6 +136,30 @@ alembic revision --autogenerate -m "description"
 - `chunk_embeddings` — pgvector embeddings for chunks
 - `conversations` — Chat conversations
 - `messages` — Conversation messages
+
+### Backup & Recovery
+
+PostgreSQL data is persisted in the `postgres_data` Docker volume. To back up the database:
+
+```bash
+# Backup (run from host, not inside container)
+docker compose exec -T postgres pg_dump -U ai_knowledge_user ai_knowledge_assistant > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Backup with compression
+docker compose exec -T postgres pg_dump -U ai_knowledge_user ai_knowledge_assistant | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+```
+
+To restore from a backup:
+
+```bash
+# Restore from .sql
+docker compose exec -T postgres psql -U ai_knowledge_user ai_knowledge_assistant < backup.sql
+
+# Restore from .sql.gz
+gunzip -c backup.sql.gz | docker compose exec -T postgres psql -U ai_knowledge_user ai_knowledge_assistant
+```
+
+**Important:** Backup files contain user data and credentials — store them securely and exclude them from version control.
 
 ## API Endpoints
 
@@ -344,6 +368,40 @@ scrape_configs:
 
 Path parameters are normalised to `{id}` for low-cardinality labels.
 
+## Logging
+
+The application uses Python's standard `logging` module with a configurable level.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APP_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+
+### Log format
+
+```
+2025-01-15 10:30:00 | INFO | app.main | Application startup complete
+2025-01-15 10:30:01 | WARNING | app.core.redis | Redis connection check failed: Connection refused
+```
+
+### Security notes
+
+- **Credentials are never logged.** Redis URLs have passwords redacted. Database connection strings are not included in application logs.
+- **Production should use `INFO` or `WARNING`** — `DEBUG` logs may include request bodies and timing details.
+- **Structured `extra` fields** are used for key context (attempt numbers, latency, environment) — grep-friendly.
+
+### Verifying logging in production
+
+```bash
+# Check application logs
+docker compose logs api | tail -20
+
+# Verify log level
+docker compose exec api python -c "import logging; print(logging.getLogger().level)"
+
+# Watch for errors
+docker compose logs api -f | grep -i error
+```
+
 ## Troubleshooting
 
 ### Database connection errors
@@ -365,7 +423,58 @@ Path parameters are normalised to `{id}` for low-cardinality labels.
 - Check `APP_CORS_ORIGINS` includes your frontend URL
 - Vite dev server proxies `/api` to `localhost:8000` by default
 
+### LLM failures
+- **Missing API key:** Ensure `APP_OPENAI_API_KEY` is set when `APP_LLM_PROVIDER=openai`
+- **OpenAI rate limits:** Check OpenAI usage dashboard; the app returns a safe error without crashing
+- **Timeout:** Default timeout is 60s (`APP_LLM_TIMEOUT`); increase for large prompts
+- **Streaming interruption:** The frontend gracefully handles dropped SSE connections
+- **Mock provider:** Use `APP_LLM_PROVIDER=mock` for development without OpenAI costs
+
 ### Redis
 - Redis is optional — used for distributed rate limiting and caching
 - When `APP_REDIS_URL` is empty, in-memory rate limiting is used
 - Check Redis connectivity via `GET /health/ready`
+- If Redis is unavailable, the app continues with in-memory rate limiting (no crash)
+
+### Rate limiting
+- Rate limits are disabled in the test environment (`APP_ENVIRONMENT=test`)
+- Auth endpoints: 10 requests/minute (default)
+- Upload: 20 requests/hour (default)
+- RAG search: 30 requests/minute (default)
+- QA: 20 requests/minute (default)
+- Check limits via the 429 response `retry_after` field
+
+### Production verification commands
+
+```bash
+# Health check
+curl -s http://localhost:8000/health | python -m json.tool
+
+# Readiness check (verifies DB + Redis)
+curl -s http://localhost:8000/health/ready | python -m json.tool
+
+# Metrics
+curl -s http://localhost:8000/metrics | head -20
+
+# Test authentication
+curl -s -X POST http://localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email": "test@example.com", "password": "TestPassword123!"}'
+
+# Test document upload
+curl -s -X POST http://localhost:8000/api/v1/documents/upload \
+  -H 'Authorization: Bearer <token>' \
+  -F 'file=@test.txt'
+
+# Test RAG search
+curl -s -X POST http://localhost:8000/api/v1/rag/search \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "test query"}'
+
+# Test QA
+curl -s -X POST http://localhost:8000/api/v1/qa/ask \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"question": "What is this about?"}'
+```
