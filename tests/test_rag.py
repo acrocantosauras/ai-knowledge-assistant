@@ -103,8 +103,7 @@ def test_rag_search_with_documents() -> None:
         files={
             "file": (
                 "facts.txt",
-                b"The capital of France is Paris."
-                b" It is known for the Eiffel Tower.",
+                b"The capital of France is Paris. It is known for the Eiffel Tower.",
                 "text/plain",
             )
         },
@@ -165,8 +164,7 @@ def test_rag_ask_with_documents() -> None:
         files={
             "file": (
                 "knowledge.txt",
-                b"The sky is blue."
-                b" Grass is green. The sun is yellow.",
+                b"The sky is blue. Grass is green. The sun is yellow.",
                 "text/plain",
             )
         },
@@ -224,8 +222,7 @@ def test_rag_stream_with_documents() -> None:
         files={
             "file": (
                 "facts.txt",
-                b"The capital of France is Paris."
-                b" It is known for the Eiffel Tower.",
+                b"The capital of France is Paris. It is known for the Eiffel Tower.",
                 "text/plain",
             )
         },
@@ -332,8 +329,7 @@ def test_rag_search_cross_user_isolation() -> None:
         files={
             "file": (
                 "secret.txt",
-                b"Top secret project Phoenix launch"
-                b" date is December 2025.",
+                b"Top secret project Phoenix launch date is December 2025.",
                 "text/plain",
             )
         },

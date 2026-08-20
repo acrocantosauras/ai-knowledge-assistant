@@ -24,7 +24,8 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 )
 @limiter.limit(get_settings().rate_limit_auth)
 async def register(
-    request: Request, data: RegisterRequest,
+    request: Request,
+    data: RegisterRequest,
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
 ) -> UserResponse:
     existing_user = await get_user_by_email(session, data.email)
@@ -49,7 +50,9 @@ async def register(
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(get_settings().rate_limit_auth)
-async def login(request: Request, data: LoginRequest,
+async def login(
+    request: Request,
+    data: LoginRequest,
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
 ) -> TokenResponse:
     user = await authenticate_user(

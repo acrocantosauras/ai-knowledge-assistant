@@ -35,9 +35,11 @@ def _mask_url(url: str) -> str:
 
         parsed = urlparse(url)
         if parsed.password:
-            return urlunparse(parsed._replace(netloc=parsed.netloc.replace(
-                f":{parsed.password}@", ":***@"
-            )))
+            return urlunparse(
+                parsed._replace(
+                    netloc=parsed.netloc.replace(f":{parsed.password}@", ":***@")
+                )
+            )
     except Exception:  # noqa: BLE001
         pass
     return url

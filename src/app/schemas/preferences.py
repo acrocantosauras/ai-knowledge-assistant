@@ -41,6 +41,7 @@ class UserPreferences(BaseModel):
 
 class UserPreferencesResponse(UserPreferences):
     """User preferences response model."""
+
     pass
 
 
@@ -73,6 +74,7 @@ class UserPreferencesUpdate(BaseModel):
 
 class UserProfileResponse(BaseModel):
     """User profile response model including preferences."""
+
     id: str
     email: str
     display_name: str | None

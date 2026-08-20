@@ -16,9 +16,7 @@ def test_is_redis_configured_true_when_url_set() -> None:
     import app.core.redis as redis_mod
 
     original = redis_mod.get_settings
-    redis_mod.get_settings = lambda: Settings(
-        redis_url="redis://localhost:6379/0"
-    )
+    redis_mod.get_settings = lambda: Settings(redis_url="redis://localhost:6379/0")
     try:
         assert is_redis_configured() is True
     finally:
@@ -36,10 +34,9 @@ async def test_check_redis_health_skipped_when_not_configured() -> None:
 async def test_check_redis_health_error_when_unreachable() -> None:
     """Health check should return error when Redis URL points nowhere."""
     import app.core.redis as redis_mod
+
     original_settings = redis_mod.get_settings
-    redis_mod.get_settings = lambda: Settings(
-        redis_url="redis://localhost:19999/0"
-    )
+    redis_mod.get_settings = lambda: Settings(redis_url="redis://localhost:19999/0")
     # Reset singleton so it picks up the new settings
     original_client = redis_mod._redis_client
     redis_mod._redis_client = None

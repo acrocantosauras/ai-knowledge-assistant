@@ -21,14 +21,14 @@ async def create_conversation(
     first_message: str | None = None,
 ) -> Conversation:
     """Create a new conversation.
-    
+
     If title is not provided but first_message is, generate a title from the message.
     """
     if title is None and first_message is not None:
         title = await generate_conversation_title(first_message)
     elif title is None:
         title = "New Conversation"
-    
+
     conversation = Conversation(
         user_id=user_id,
         title=title,
@@ -196,10 +196,10 @@ async def generate_conversation_title(
         )
         title = response.content.strip()
         # Remove quotes if present
-        title = title.strip('"\'')
+        title = title.strip("\"'")
         # Ensure it's not too long
         if len(title) > max_length:
-            title = title[:max_length - 3] + "..."
+            title = title[: max_length - 3] + "..."
         return title or "New Conversation"
     except Exception:
         # Fallback to simple truncation
@@ -213,7 +213,7 @@ def _generate_simple_title(
     """Generate a simple conversation title from the first message (fallback)."""
     title = first_message.strip()
     if len(title) > max_length:
-        title = title[:max_length - 3] + "..."
+        title = title[: max_length - 3] + "..."
     return title or "New Conversation"
 
 
@@ -233,4 +233,3 @@ async def count_messages_for_conversations(
         .group_by(Message.conversation_id)
     )
     return {row[0]: row[1] for row in result.all()}
-

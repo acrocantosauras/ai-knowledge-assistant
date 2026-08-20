@@ -1,6 +1,5 @@
 """Tests for LLM service and providers."""
 
-
 import pytest
 from pydantic import ValidationError
 
@@ -140,6 +139,7 @@ class TestLLMService:
     def reset_singleton(self) -> None:
         """Reset singleton before each test."""
         import app.services.llm as llm_module
+
         llm_module._llm_service = None
         yield
         llm_module._llm_service = None
@@ -197,6 +197,7 @@ class TestLLMProviderSelection:
     def reset_singleton(self) -> None:
         """Reset singleton before each test."""
         import app.services.llm as llm_module
+
         llm_module._llm_service = None
         yield
         llm_module._llm_service = None
@@ -205,6 +206,7 @@ class TestLLMProviderSelection:
         """llm_provider='mock' selects MockProvider."""
         settings = Settings(llm_provider="mock")
         import app.services.llm as llm_module
+
         llm_module._llm_service = None
         service = LLMService()
         service.settings = settings
@@ -215,6 +217,7 @@ class TestLLMProviderSelection:
         """llm_provider='openai' selects OpenAIProvider."""
         settings = Settings(llm_provider="openai")
         import app.services.llm as llm_module
+
         llm_module._llm_service = None
         service = LLMService()
         service.settings = settings

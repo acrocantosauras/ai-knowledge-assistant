@@ -33,13 +33,13 @@ async def ask_question_endpoint(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> QuestionResponse:
     """Ask a question and get an answer using RAG.
-    
+
     If conversation_id is provided, the Q&A will be saved to that conversation.
     If not provided, a new conversation will be created.
     """
     start_time = time.monotonic()
     conversation_id = data.conversation_id
-    
+
     # If no conversation provided, create one with LLM-generated title
     if conversation_id is None:
         conversation = await conversation_service.create_conversation(
@@ -61,7 +61,7 @@ async def ask_question_endpoint(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Conversation not found",
             )
-    
+
     # Ask the question using QA service
     qa_response = await ask_question(
         session=db,
@@ -70,7 +70,7 @@ async def ask_question_endpoint(
         limit=data.limit,
         threshold=data.threshold,
     )
-    
+
     # Save user message (question)
     question_message = await conversation_service.add_message(
         session=db,
@@ -80,13 +80,13 @@ async def ask_question_endpoint(
         content=data.question,
         metadata={"type": "question"},
     )
-    
+
     if not question_message:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save question message",
         )
-    
+
     # Save assistant message (answer)
     answer_message = await conversation_service.add_message(
         session=db,
@@ -102,13 +102,13 @@ async def ask_question_endpoint(
             "model": qa_response.model,
         },
     )
-    
+
     if not answer_message:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save answer message",
         )
-    
+
     await db.commit()
 
     # Record metrics
@@ -137,22 +137,23 @@ async def ask_question_stream_endpoint(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> StreamingResponse:
     """Ask a question and stream the answer using RAG with Server-Sent Events (SSE).
-    
+
     If conversation_id is provided, the Q&A will be saved to that conversation.
     If not provided, a new conversation will be created.
-    
+
     Returns a stream of JSON objects with the following types:
     - sources: Contains source documents
     - answer: Contains answer chunks with is_final flag
     - error: Contains error message
     """
+
     async def event_generator() -> AsyncGenerator[str, None]:
         conversation_id = data.conversation_id
         question_message = None
         answer_message = None
         full_answer = ""
         stream_start_time = time.monotonic()
-        
+
         try:
             # If no conversation provided, create one with LLM-generated title
             if conversation_id is None:
@@ -176,7 +177,7 @@ async def ask_question_stream_endpoint(
                     )
                     yield f"data: {error_data.model_dump_json()}\n\n"
                     return
-            
+
             # Save user message (question) immediately
             question_message = await conversation_service.add_message(
                 session=db,
@@ -186,14 +187,14 @@ async def ask_question_stream_endpoint(
                 content=data.question,
                 metadata={"type": "question"},
             )
-            
+
             if not question_message:
                 error_data = StreamingResponseSchema(
                     type="error", error="Failed to save question message"
                 )
                 yield f"data: {error_data.model_dump_json()}\n\n"
                 return
-            
+
             # Stream the answer
             async for chunk in ask_question_stream(
                 session=db,
@@ -205,13 +206,13 @@ async def ask_question_stream_endpoint(
                 # Yield the chunk as SSE
                 chunk_data = StreamingResponseSchema(**chunk)
                 yield f"data: {chunk_data.model_dump_json()}\n\n"
-                
+
                 # Accumulate answer content
                 if chunk.get("type") == "answer":
                     content = chunk.get("content", "")
                     if content:
                         full_answer += content
-                    
+
                     # Save answer message when complete
                     if chunk.get("is_final"):
                         answer_message = await conversation_service.add_message(
@@ -228,7 +229,7 @@ async def ask_question_stream_endpoint(
                                 "model": chunk.get("model", "unknown"),
                             },
                         )
-                        
+
                         if answer_message:
                             await db.commit()
 
@@ -238,7 +239,7 @@ async def ask_question_stream_endpoint(
                         QA_LATENCY_SECONDS.labels(provider=provider).observe(
                             time.monotonic() - stream_start_time
                         )
-            
+
         except Exception:  # noqa: BLE001
             logger.exception("Streaming QA error for user %s", current_user.id)
             error_data = StreamingResponseSchema(
@@ -246,7 +247,7 @@ async def ask_question_stream_endpoint(
                 error="An internal error occurred. Please try again.",
             )
             yield f"data: {error_data.model_dump_json()}\n\n"
-    
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",

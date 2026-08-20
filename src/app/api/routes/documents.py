@@ -92,7 +92,7 @@ async def get_user_document(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
-    
+
     chunk_count = await _get_chunk_count(db, document_id)
     doc_dict = document.__dict__.copy()
     doc_dict["chunk_count"] = chunk_count

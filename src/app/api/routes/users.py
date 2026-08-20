@@ -40,22 +40,22 @@ async def update_user_preferences_endpoint(
     # Merge existing preferences with updates
     existing_prefs = current_user.preferences or {}
     update_data = data.model_dump(exclude_unset=True, exclude_none=True)
-    
+
     # Merge custom preferences
     if "custom" in update_data and update_data["custom"]:
         existing_custom = existing_prefs.get("custom", {})
         existing_custom.update(update_data.pop("custom"))
         update_data["custom"] = existing_custom
-    
+
     merged_prefs = {**existing_prefs, **update_data}
-    
+
     user = await update_user_preferences(db, current_user.id, merged_prefs)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
+
     return UserPreferences.model_validate(user.preferences or {})
 
 

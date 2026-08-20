@@ -88,21 +88,13 @@ class Settings(BaseSettings):
                     " Generate: python -c 'import secrets;"
                     " print(secrets.token_urlsafe(64))'"
                 )
-            if (
-                self.embedding_provider == "openai"
-                and not self.openai_api_key
-            ):
+            if self.embedding_provider == "openai" and not self.openai_api_key:
                 raise ValueError(
-                    "APP_OPENAI_API_KEY is required when"
-                    " APP_EMBEDDING_PROVIDER=openai"
+                    "APP_OPENAI_API_KEY is required when APP_EMBEDDING_PROVIDER=openai"
                 )
-            if (
-                self.llm_provider == "openai"
-                and not self.openai_api_key
-            ):
+            if self.llm_provider == "openai" and not self.openai_api_key:
                 raise ValueError(
-                    "APP_OPENAI_API_KEY is required when"
-                    " APP_LLM_PROVIDER=openai"
+                    "APP_OPENAI_API_KEY is required when APP_LLM_PROVIDER=openai"
                 )
         return self
 

@@ -86,19 +86,22 @@ async def ask_question(
     sources = []
     for _i, chunk in enumerate(chunks):
         context_texts.append(chunk.content)
-        sources.append({
-            "document_id": str(chunk.document_id),
-            "chunk_id": str(chunk.id),
-            "content_preview": (
-                chunk.content[:200] + "..."
-                if len(chunk.content) > 200
-                else chunk.content
-            ),
-            "score": (
-                float(chunk.score) if getattr(chunk, "score", None) is not None
-                else None
-            ),
-        })
+        sources.append(
+            {
+                "document_id": str(chunk.document_id),
+                "chunk_id": str(chunk.id),
+                "content_preview": (
+                    chunk.content[:200] + "..."
+                    if len(chunk.content) > 200
+                    else chunk.content
+                ),
+                "score": (
+                    float(chunk.score)
+                    if getattr(chunk, "score", None) is not None
+                    else None
+                ),
+            }
+        )
 
     # Truncate context if too long
     max_context_chars = 32000
@@ -174,19 +177,22 @@ async def ask_question_stream(
     sources = []
     for _i, chunk in enumerate(chunks):
         context_texts.append(chunk.content)
-        sources.append({
-            "document_id": str(chunk.document_id),
-            "chunk_id": str(chunk.id),
-            "content_preview": (
-                chunk.content[:200] + "..."
-                if len(chunk.content) > 200
-                else chunk.content
-            ),
-            "score": (
-                float(chunk.score) if getattr(chunk, "score", None) is not None
-                else None
-            ),
-        })
+        sources.append(
+            {
+                "document_id": str(chunk.document_id),
+                "chunk_id": str(chunk.id),
+                "content_preview": (
+                    chunk.content[:200] + "..."
+                    if len(chunk.content) > 200
+                    else chunk.content
+                ),
+                "score": (
+                    float(chunk.score)
+                    if getattr(chunk, "score", None) is not None
+                    else None
+                ),
+            }
+        )
 
     # Truncate context if too long
     max_context_chars = 32000
@@ -233,6 +239,6 @@ def _truncate_context(context_texts: list[str], max_chars: int) -> list[str]:
     final_chars = sum(len(c) for c in truncated)
     if final_chars > max_chars:
         excess = final_chars - max_chars
-        truncated[-1] = truncated[-1][:-excess - 3] + "..."
+        truncated[-1] = truncated[-1][: -excess - 3] + "..."
 
     return truncated

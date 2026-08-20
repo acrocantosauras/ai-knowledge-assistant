@@ -267,10 +267,7 @@ async def get_document_by_id(
 
 
 async def list_user_documents(
-    session: AsyncSession,
-    user_id: UUID,
-    limit: int = 50,
-    offset: int = 0
+    session: AsyncSession, user_id: UUID, limit: int = 50, offset: int = 0
 ) -> tuple[list[Document], int]:
     """List documents belonging to the specified user."""
     query = (

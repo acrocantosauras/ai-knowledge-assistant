@@ -10,9 +10,7 @@ async def get_user_by_email(
     session: AsyncSession,
     email: str,
 ) -> User | None:
-    result = await session.execute(
-        select(User).where(User.email == email.lower())
-    )
+    result = await session.execute(select(User).where(User.email == email.lower()))
     return result.scalar_one_or_none()
 
 
@@ -55,16 +53,14 @@ async def update_user_preferences(
     preferences: dict,
 ) -> User | None:
     """Update user preferences."""
-    result = await session.execute(
-        select(User).where(User.id == user_id)
-    )
+    result = await session.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    
+
     if not user:
         return None
-    
+
     user.preferences = preferences
     await session.commit()
     await session.refresh(user)
-    
+
     return user

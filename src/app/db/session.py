@@ -9,6 +9,7 @@ from app.config import get_settings
 
 settings = get_settings()
 
+
 def get_database_url() -> str:
     if settings.environment == "test":
         return settings.test_database_url

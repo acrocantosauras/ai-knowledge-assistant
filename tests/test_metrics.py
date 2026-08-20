@@ -168,7 +168,7 @@ def test_document_upload_increments_counter() -> None:
 
     response = client.get("/metrics")
     body = response.text
-    assert 'documents_uploaded_total' in body
+    assert "documents_uploaded_total" in body
     assert f'user_id="{token[:36]}"' in body or 'user_id="' in body
 
 
@@ -185,7 +185,7 @@ def test_conversation_create_increments_counter() -> None:
 
     response = client.get("/metrics")
     body = response.text
-    assert 'conversations_created_total' in body
+    assert "conversations_created_total" in body
 
 
 def test_qa_ask_increments_counter() -> None:
@@ -201,8 +201,8 @@ def test_qa_ask_increments_counter() -> None:
 
     response = client.get("/metrics")
     body = response.text
-    assert 'qa_questions_total' in body
-    assert 'qa_latency_seconds' in body
+    assert "qa_questions_total" in body
+    assert "qa_latency_seconds" in body
 
 
 def test_rag_search_increments_counter() -> None:
@@ -218,8 +218,8 @@ def test_rag_search_increments_counter() -> None:
 
     response = client.get("/metrics")
     body = response.text
-    assert 'rag_search_total' in body
-    assert 'rag_chunks_returned' in body
+    assert "rag_search_total" in body
+    assert "rag_chunks_returned" in body
 
 
 def test_qa_ask_counter_has_provider_label() -> None:
@@ -252,8 +252,8 @@ def test_conversation_counter_has_user_id_label() -> None:
 
     response = client.get("/metrics")
     body = response.text
-    assert 'conversations_created_total' in body
-    assert 'user_id=' in body
+    assert "conversations_created_total" in body
+    assert "user_id=" in body
 
 
 def test_metrics_endpoint_no_cardinality_explosion() -> None:
@@ -275,5 +275,5 @@ def test_metrics_endpoint_no_cardinality_explosion() -> None:
     response = client.get("/metrics")
     body = response.text
     # UUID should be normalised to {id}
-    assert '00000000-0000-0000-0000-000000000001' not in body
-    assert '{id}' in body
+    assert "00000000-0000-0000-0000-000000000001" not in body
+    assert "{id}" in body

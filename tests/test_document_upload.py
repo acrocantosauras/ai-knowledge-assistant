@@ -54,9 +54,7 @@ def test_document_get_requires_authentication() -> None:
 
 def test_document_delete_requires_authentication() -> None:
     client = TestClient(create_app())
-    response = client.delete(
-        "/api/v1/documents/00000000-0000-0000-0000-000000000000"
-    )
+    response = client.delete("/api/v1/documents/00000000-0000-0000-0000-000000000000")
     assert response.status_code in (401, 422)
 
 

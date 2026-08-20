@@ -125,16 +125,13 @@ class EmbeddingService:
         embeddings = await self.generate_embeddings([text])
         return embeddings[0]
 
-    async def _generate_openai_embeddings(
-        self, texts: list[str]
-    ) -> list[list[float]]:
+    async def _generate_openai_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings using OpenAI API."""
         try:
             import openai
         except ImportError as exc:
             raise RuntimeError(
-                "OpenAI package not installed. "
-                "Install with 'pip install openai'."
+                "OpenAI package not installed. Install with 'pip install openai'."
             ) from exc
 
         if not self.settings.openai_api_key:
@@ -147,9 +144,7 @@ class EmbeddingService:
         )
         return [data.embedding for data in response.data]
 
-    async def _generate_local_embeddings(
-        self, texts: list[str]
-    ) -> list[list[float]]:
+    async def _generate_local_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings using a local model."""
         try:
             from sentence_transformers import SentenceTransformer
@@ -162,15 +157,11 @@ class EmbeddingService:
         if not self.settings.local_embedding_model_path:
             raise RuntimeError("Local embedding model path not configured")
 
-        model = SentenceTransformer(
-            self.settings.local_embedding_model_path
-        )
+        model = SentenceTransformer(self.settings.local_embedding_model_path)
         embeddings = model.encode(texts, convert_to_numpy=True)
         return embeddings.tolist()
 
-    async def _generate_mock_embeddings(
-        self, texts: list[str]
-    ) -> list[list[float]]:
+    async def _generate_mock_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generate deterministic mock embeddings for testing."""
         embeddings = []
         for text_content in texts:
@@ -238,20 +229,12 @@ async def search_similar_chunks(
         select(DocumentChunk)
         .join(ChunkEmbedding, DocumentChunk.id == ChunkEmbedding.chunk_id)
         .where(DocumentChunk.user_id == user_id)
+        .where(ChunkEmbedding.embedding_model == get_settings().embedding_model)
         .where(
-            ChunkEmbedding.embedding_model
-            == get_settings().embedding_model
-        )
-        .where(
-            text(
-                "1 - (chunk_embeddings.embedding <=> :query_embedding)"
-                " >= :threshold"
-            )
+            text("1 - (chunk_embeddings.embedding <=> :query_embedding) >= :threshold")
         )
         .options(selectinload(DocumentChunk.document))
-        .order_by(
-            text("chunk_embeddings.embedding <=> :query_embedding")
-        )
+        .order_by(text("chunk_embeddings.embedding <=> :query_embedding"))
         .limit(limit)
         .params(
             query_embedding=query_embedding,

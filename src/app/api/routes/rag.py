@@ -48,18 +48,20 @@ def _build_context_from_chunks(
     sources = []
     for _i, chunk in enumerate(chunks):
         context_texts.append(chunk.content)
-        sources.append({
-            "document_id": str(chunk.document_id),
-            "chunk_id": str(chunk.id),
-            "document_title": chunk.document.title,
-            "chunk_index": chunk.chunk_index,
-            "content_preview": (
-                chunk.content[:200] + "..."
-                if len(chunk.content) > 200
-                else chunk.content
-            ),
-            "score": float(chunk.score) if chunk.score is not None else None,
-        })
+        sources.append(
+            {
+                "document_id": str(chunk.document_id),
+                "chunk_id": str(chunk.id),
+                "document_title": chunk.document.title,
+                "chunk_index": chunk.chunk_index,
+                "content_preview": (
+                    chunk.content[:200] + "..."
+                    if len(chunk.content) > 200
+                    else chunk.content
+                ),
+                "score": float(chunk.score) if chunk.score is not None else None,
+            }
+        )
     return context_texts, sources
 
 
@@ -80,7 +82,7 @@ def _truncate_context(context_texts: list[str], max_chars: int = 32000) -> list[
     final_chars = sum(len(c) for c in truncated)
     if final_chars > max_chars:
         excess = final_chars - max_chars
-        truncated[-1] = truncated[-1][:-excess - 3] + "..."
+        truncated[-1] = truncated[-1][: -excess - 3] + "..."
 
     return truncated
 

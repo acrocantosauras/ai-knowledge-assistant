@@ -75,7 +75,8 @@ async def list_conversations(
     conv_ids = [conv.id for conv in conversations]
     message_counts = (
         await conversation_service.count_messages_for_conversations(
-            session=db, conversation_ids=conv_ids,
+            session=db,
+            conversation_ids=conv_ids,
         )
         if conv_ids
         else {}
@@ -258,4 +259,3 @@ async def add_message_to_conversation(
         created_at=message.created_at,
         updated_at=message.updated_at,
     )
-

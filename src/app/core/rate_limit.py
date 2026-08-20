@@ -35,9 +35,7 @@ def _create_limiter():
         storage = settings.redis_url
         import logging
 
-        logging.getLogger(__name__).info(
-            "Rate limiter using Redis storage"
-        )
+        logging.getLogger(__name__).info("Rate limiter using Redis storage")
 
     return Limiter(
         key_func=_get_client_ip,
@@ -52,6 +50,7 @@ class _NoOpLimiter:
     def limit(self, *args, **kwargs):  # noqa: ARG002
         def decorator(func):
             return func
+
         return decorator
 
     def exempt(self, func):  # noqa: ARG002
@@ -70,9 +69,7 @@ def setup_rate_limiting(app):
         return
 
     app.state.limiter = limiter
-    app.add_exception_handler(
-        RateLimitExceeded, _rate_limit_exceeded_handler
-    )
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
 
 

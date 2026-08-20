@@ -244,13 +244,13 @@ class OpenAIProvider(BaseLLMProvider):
         )
         messages = [{"role": "system", "content": system_prompt}]
         if context:
-            ctx = "\n\n".join(
-                f"[Doc {i + 1}]: {c}" for i, c in enumerate(context)
+            ctx = "\n\n".join(f"[Doc {i + 1}]: {c}" for i, c in enumerate(context))
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"Context:\n{ctx}\n\nQuestion: {user_message}",
+                }
             )
-            messages.append({
-                "role": "user",
-                "content": f"Context:\n{ctx}\n\nQuestion: {user_message}",
-            })
         else:
             messages.append({"role": "user", "content": user_message})
 
@@ -311,8 +311,13 @@ class OpenAIProvider(BaseLLMProvider):
             raise RuntimeError("LLM streaming failed") from None
 
     async def generate_with_context_stream(
-        self, system_prompt: str, user_message: str, context: list[str] | None = None,
-        temperature: float | None = None, max_tokens: int | None = None, **kwargs: Any,
+        self,
+        system_prompt: str,
+        user_message: str,
+        context: list[str] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        **kwargs: Any,
     ) -> AsyncGenerator[StreamingChunk, None]:
         """Generate streaming text with context using OpenAI API."""
         try:
@@ -329,13 +334,13 @@ class OpenAIProvider(BaseLLMProvider):
         )
         messages = [{"role": "system", "content": system_prompt}]
         if context:
-            ctx = "\n\n".join(
-                f"[Doc {i + 1}]: {c}" for i, c in enumerate(context)
+            ctx = "\n\n".join(f"[Doc {i + 1}]: {c}" for i, c in enumerate(context))
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"Context:\n{ctx}\n\nQuestion: {user_message}",
+                }
             )
-            messages.append({
-                "role": "user",
-                "content": f"Context:\n{ctx}\n\nQuestion: {user_message}",
-            })
         else:
             messages.append({"role": "user", "content": user_message})
 
@@ -402,9 +407,7 @@ class LLMService:
         """Generate text from a prompt."""
         if not prompt or not prompt.strip():
             raise ValueError("Prompt cannot be empty")
-        return await self.provider.generate(
-            prompt, temperature, max_tokens, **kwargs
-        )
+        return await self.provider.generate(prompt, temperature, max_tokens, **kwargs)
 
     async def generate_with_context(
         self,

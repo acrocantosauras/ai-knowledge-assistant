@@ -172,11 +172,10 @@ class TestLLMFailureBehavior:
 
         with pytest.raises(RuntimeError):
             import asyncio
+
             loop = asyncio.new_event_loop()
             try:
-                loop.run_until_complete(
-                    provider.generate("test prompt")
-                )
+                loop.run_until_complete(provider.generate("test prompt"))
             finally:
                 loop.close()
 
@@ -204,9 +203,7 @@ class TestLLMFailureBehavior:
         provider = MockProvider()
         loop = asyncio.new_event_loop()
         try:
-            response = loop.run_until_complete(
-                provider.generate("test prompt")
-            )
+            response = loop.run_until_complete(provider.generate("test prompt"))
         finally:
             loop.close()
         assert response.content

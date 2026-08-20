@@ -171,7 +171,8 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(
-        request: Request, exc: Exception,
+        request: Request,
+        exc: Exception,
     ) -> JSONResponse:
         _global_logger.exception(
             "Unhandled exception on %s %s",

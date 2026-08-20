@@ -31,6 +31,7 @@ def create_access_token(subject: str) -> str:
         algorithm=settings.jwt_algorithm,
     )
 
+
 def decode_access_token(token: str) -> str | None:
     settings = get_settings()
 
