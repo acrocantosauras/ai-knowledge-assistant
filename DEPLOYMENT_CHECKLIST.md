@@ -1,404 +1,127 @@
-# Deployment Readiness Checklist for AI Knowledge Assistant
+# Deployment Checklist
 
-This checklist verifies that the application is ready for public cloud deployment.
+Companion to `DEPLOYMENT_READINESS_SUMMARY.md` (what was verified) and the
+Production Deployment section of `README.md`.
 
-## Executive Summary
+## 1. Environment variables
 
-✅ **No deployment blockers identified** - The application is ready for public cloud deployment with the configurations outlined below.
+Required in production (compose refuses to start without them; the app also
+refuses to start with insecure values when `APP_ENVIRONMENT=production`):
 
----
+| Variable | Requirement |
+|---|---|
+| `POSTGRES_PASSWORD` | strong, not the dev default (`ai_knowledge_password` is rejected) |
+| `APP_JWT_SECRET_KEY` | >= 32 chars, not the placeholder |
+| `APP_METRICS_TOKEN` | >= 16 chars; Prometheus presents it as a bearer token |
+| `APP_CORS_ORIGINS` | JSON list, e.g. `["https://app.example.com"]`; `*` is rejected |
 
-## 1. Required Production Environment Variables
+Optional: `POSTGRES_USER`, `POSTGRES_DB`, `APP_PORT`, `APP_LOG_LEVEL`,
+`APP_RATE_LIMIT_*`, `APP_LLM_PROVIDER` / `APP_EMBEDDING_PROVIDER`
+(`mock` | `openai`), `APP_OPENAI_API_KEY`, `APP_LLM_MODEL`,
+`APP_EMBEDDING_MODEL`, `APP_EMBEDDING_DIMENSION` (must match the model, 1536 for
+`text-embedding-3-small`), `APP_LLM_TIMEOUT`.
 
-### Mandatory Variables
-
-| Variable | Description | Example Value |
-|----------|-------------|---------------|
-| `APP_ENVIRONMENT` | Environment mode | `production` |
-| `APP_JWT_SECRET_KEY` | JWT signing secret (64+ chars) | `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
-| `APP_DATABASE_URL` | PostgreSQL connection string | `postgresql+asyncpg://user:pass@postgres:5432/ai_knowledge_assistant` |
-| `POSTGRES_DB` | Database name | `ai_knowledge_assistant` |
-| `POSTGRES_USER` | Database user | `ai_knowledge_user` |
-| `POSTGRES_PASSWORD` | Database password | Generated secure password |
-
-### Optional Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `APP_LOG_LEVEL` | Logging level | `INFO` |
-| `APP_LLM_PROVIDER` | LLM provider | `mock` |
-| `APP_LLM_MODEL` | LLM model name | `gpt-4o-mini` |
-| `APP_OPENAI_API_KEY` | OpenAI API key | - |
-| `APP_REDIS_URL` | Redis connection string | - |
-| `APP_CORS_ORIGINS` | Allowed CORS origins | `["http://localhost:3000"]` |
-| `APP_RATE_LIMIT_*` | Rate limit configurations | See .env.example |
-
----
-
-## 2. Secrets to Generate
-
-### Required Secrets
-
-1. **JWT Secret Key** (64+ characters)
-   ```bash
-   python -c "import secrets; print(secrets.token_urlsafe(64))"
-   ```
-
-2. **PostgreSQL Password** (32+ characters)
-   ```bash
-   python -c "import secrets; print(secrets.token_urlsafe(32))"
-   ```
-
-3. **OpenAI API Key** (if using OpenAI)
-   - Obtain from OpenAI dashboard
-
-### Secret Management
-
-- Store secrets in a secure secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.)
-- Never commit secrets to version control
-- Use environment variables or secret mounts in production
-
----
-
-## 3. Required Services
-
-### Core Services
-
-| Service | Purpose | Required |
-|---------|---------|----------|
-| **API** | FastAPI backend | ✅ |
-| **PostgreSQL + pgvector** | Database with vector search | ✅ |
-| **Redis** | Rate limiting & caching | Optional |
-
-### Service Dependencies
-
-- API depends on PostgreSQL (required)
-- API depends on Redis (optional, falls back to in-memory)
-- API serves frontend static files (built into Docker image)
-
----
-
-## 4. Ports to Publicly Expose
-
-### Production Configuration
-
-| Port | Service | Exposure |
-|------|---------|----------|
-| **8000** | API (FastAPI) | ✅ Public |
-| 5432 | PostgreSQL | ❌ Internal only |
-| 6379 | Redis | ❌ Internal only |
-
-**Note:** `docker-compose.prod.yml` removes PostgreSQL and Redis ports from public exposure.
-
----
-
-## 5. Frontend Serving
-
-### Architecture
-
-- Frontend is built during Docker build (multi-stage)
-- Static files served by FastAPI at `/static`
-- SPA routing handled by catch-all route
-- API routes served at `/api/v1/*`
-
-### Production Frontend URLs
-
-- Frontend: `https://your-domain.com/`
-- API Docs: `https://your-domain.com/docs`
-- Health Check: `https://your-domain.com/health`
-
----
-
-## 6. Alembic Migrations
-
-### Migration Commands
+## 2. Generate secrets
 
 ```bash
-# Run migrations in production
-docker compose exec api alembic upgrade head
-
-# Check current migration
-docker compose exec api alembic current
-
-# Create new migration (development only)
-docker compose exec api alembic revision --autogenerate -m "description"
+python -c "import secrets; print(secrets.token_urlsafe(64))"   # APP_JWT_SECRET_KEY
+python -c "import secrets; print(secrets.token_hex(24))"       # POSTGRES_PASSWORD
+python -c "import secrets; print(secrets.token_urlsafe(32))"   # APP_METRICS_TOKEN
 ```
 
-### Migration Safety
+Keep `.env.production` out of git (it is ignored). Quote JSON values correctly
+in the file; do **not** `source` the file in a shell (it strips quotes from
+`APP_CORS_ORIGINS` and shell variables override the env file in compose).
 
-- ✅ Migrations are idempotent
-- ✅ No destructive operations in existing migrations
-- ✅ Alembic uses async connections
-- ✅ Database backup before migration recommended
-
----
-
-## 7. Persistent Storage Configuration
-
-### Volumes
-
-| Volume | Purpose | Persistence |
-|--------|---------|-------------|
-| `postgres_data` | PostgreSQL data | ✅ Persistent |
-| `redis_data` | Redis data | ✅ Persistent |
-
-### Backup Strategy
+## 3. Deploy
 
 ```bash
-# Backup PostgreSQL
-docker compose exec -T postgres pg_dump -U ai_knowledge_user ai_knowledge_assistant > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Backup with compression
-docker compose exec -T postgres pg_dump -U ai_knowledge_user ai_knowledge_assistant | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
-
-# Restore from backup
-docker compose exec -T postgres psql -U ai_knowledge_user ai_knowledge_assistant < backup.sql
+cp .env.production.example .env.production      # then fill in
+docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml config -q
+docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build --wait
 ```
 
----
+Order: `postgres` + `redis` healthy -> `migrate` (alembic upgrade head) exits 0
+-> `api` starts. Postgres and Redis are not published on the host.
 
-## 8. Deployment Smoke Test Execution
-
-### Running Against Public Deployment
+## 4. Verify
 
 ```bash
-# Against your public URL
-./scripts/smoke-test.sh https://your-domain.com
-
-# Against local stack
-./scripts/smoke-test.sh http://localhost:8000
+curl -fsS http://localhost:8000/health/ready
+METRICS_TOKEN=<token> COMPOSE_PROJECT_NAME=<project> bash scripts/smoke-test.sh http://localhost:8000
+COMPOSE="docker compose -p <project> --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml" \
+  bash scripts/reliability-test.sh      # restarts containers of that project; use on staging
 ```
 
-### What the Smoke Test Verifies
+## 5. Reverse proxy, TLS and metrics access
 
-- Container health (api, postgres, redis)
-- Health/readiness endpoints
-- Prometheus metrics format
-- Frontend serving (root, SPA routes, static assets)
-- Authentication workflow (register, login, JWT, profile)
-- Document upload, list, get, delete lifecycle
-- RAG search and ask with uploaded documents
-- QA ask and streaming endpoints
-- Conversation persistence and retrieval
-- User preferences get and update
-- Automatic cleanup of test data
+- TLS is **not** terminated by the application. Use nginx/Caddy/a cloud LB
+  (`deploy/nginx.example.conf`), redirect HTTP to HTTPS, set HSTS.
+- `/metrics` must not be internet-reachable: restrict by network in the proxy
+  **and** keep `APP_METRICS_TOKEN` (defence in depth). Prometheus scrapes the
+  private address with the token (`deploy/prometheus.example.yml`).
+- `/health` (liveness) and `/health/ready` (DB + Redis) are unauthenticated and
+  reveal only status.
+- Streaming (`/api/v1/qa/ask/stream`) needs proxy buffering off and a long read
+  timeout (see example config). Set `client_max_body_size` >= 11m.
+- Behind a proxy set `FORWARDED_ALLOW_IPS` (uvicorn) so rate limiting sees real
+  client IPs. API docs (`/docs`) are disabled in production.
 
-### Expected Output
-
-```
-Results: 25/25 passed, 0 failed
-
-✓ SMOKE TEST PASSED
-```
-
----
-
-## 9. HTTPS/Reverse Proxy Configuration
-
-### Requirements
-
-**YES, HTTPS is required for production deployment.**
-
-### Implementation Options
-
-1. **Cloud Provider Load Balancer** (Recommended)
-   - AWS ALB/NLB
-   - GCP Load Balancer
-   - Azure Application Gateway
-
-2. **Nginx/Caddy Reverse Proxy**
-   - Terminate SSL at proxy
-   - Forward to API on port 8000
-
-3. **Docker with SSL**
-   - Mount SSL certificates
-   - Configure uvicorn with SSL
-
-### HTTPS Configuration Example (Nginx)
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name your-domain.com;
-    
-    ssl_certificate /etc/ssl/certs/your-domain.crt;
-    ssl_certificate_key /etc/ssl/private/your-domain.key;
-    
-    location / {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
----
-
-## 10. CORS Configuration for Public Domain
-
-### Required Changes
-
-**YES, CORS must be updated for your public domain.**
-
-### Configuration
-
-Update `APP_CORS_ORIGINS` in your production environment:
+## 6. OpenAI configuration (NEEDS CONFIGURATION until you run it)
 
 ```bash
-# Example for production domain
-APP_CORS_ORIGINS=["https://your-domain.com","http://localhost:3000"]
-```
-
-### Current Default
-
-```bash
-# Default (development only)
-APP_CORS_ORIGINS=["http://localhost:3000","http://localhost:5173"]
-```
-
----
-
-## 11. Localhost References in Production
-
-### Analysis
-
-| Location | Reference | Production Impact |
-|----------|-----------|-------------------|
-| `.env.example` | `localhost:5432` | ⚠️ Template only, not used |
-| `.env` | `localhost:5432` | ⚠️ Local development only |
-| `.env.production` | `localhost:8000` | ⚠️ Should be updated |
-| `docker-compose.yml` | `localhost:8000` | ✅ Container internal |
-| `src/app/config.py` | `localhost:5432` | ⚠️ Default, overridden in prod |
-| `tests/` | Various localhost | ✅ Test environment only |
-
-### Recommendations
-
-1. **Update `.env.production`** to remove localhost references
-2. **Use container names** in Docker environments (already done)
-3. **Verify production config** doesn't reference localhost
-
----
-
-## 12. Secret Leakage Prevention
-
-### ✅ Security Measures Already Implemented
-
-- **No secrets in version control** - `.gitignore` excludes `.env*` files
-- **No passwords in responses** - UserResponse doesn't expose password_hash
-- **No credentials in logs** - Redis URLs masked, DB URLs not logged
-- **Health endpoints sanitized** - Raw exceptions never exposed
-- **Production validation** - JWT secret required and validated
-- **Non-root Docker user** - Runs as `appuser`
-
-### ⚠️ Recommendations
-
-1. **Use secrets manager** - Don't store secrets in environment files
-2. **Enable audit logging** - Track who accesses secrets
-3. **Rotate secrets regularly** - Implement secret rotation policy
-4. **Review `.env.production`** - Ensure no hardcoded secrets
-
----
-
-## Production Environment Variables (Final)
-
-### Minimum Required
-
-```bash
-# Production
-APP_ENVIRONMENT=production
-APP_JWT_SECRET_KEY=<generated-64-char-secret>
-APP_DATABASE_URL=postgresql+asyncpg://ai_knowledge_user:<strong-password>@postgres:5432/ai_knowledge_assistant
-POSTGRES_DB=ai_knowledge_assistant
-POSTGRES_USER=ai_knowledge_user
-POSTGRES_PASSWORD=<strong-password>
-
-# CORS for your domain
-APP_CORS_ORIGINS=["https://your-domain.com"]
-
-# Optional: OpenAI
 APP_LLM_PROVIDER=openai
-APP_OPENAI_API_KEY=<your-openai-api-key>
+APP_EMBEDDING_PROVIDER=openai
+APP_OPENAI_API_KEY=<key>            # from a secret store, never committed
 ```
 
----
+Then, against the running stack: upload a document, `POST /api/v1/rag/search`,
+`POST /api/v1/qa/ask`, and the stream endpoint; confirm sources/citations. Error
+mapping: invalid key -> 502 "misconfigured", rate limit/quota -> 429, timeout ->
+504, other provider failure -> 502; keys are never logged. Switching embedding
+model/dimension requires re-uploading documents.
 
-## Deployment Commands
+## 7. Migrations
 
-### 1. Generate Secrets
+Automatic via the `migrate` service. Manual run:
 
 ```bash
-# JWT Secret
-python -c "import secrets; print(secrets.token_urlsafe(64))"
-
-# Database Password
-python -c "import secrets; print(secrets.token_urlsafe(32))"
+docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml run --rm migrate
 ```
 
-### 2. Create Production Environment File
+Migrations are forward-only in this process; take a backup first.
+
+## 8. Backup and recovery
 
 ```bash
-cp .env.example .env.production
-# Edit with actual values
+docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > backup-$(date +%F).sql.gz
+# restore into an empty database
+gunzip -c backup-YYYY-MM-DD.sql.gz | docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml \
+  exec -T postgres sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'
 ```
 
-### 3. Deploy Stack
+Data lives in the `postgres_data` volume; never run `docker compose down -v` on
+production. A restore drill was **not** executed during validation: perform one
+before relying on backups.
 
-```bash
-# Build and start
-docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  --env-file .env.production up -d --build
+## 9. Troubleshooting
 
-# Run migrations
-docker compose exec api alembic upgrade head
+- `migrate` fails: `docker compose logs migrate` (DB credentials, extension permission).
+- `api` restarts immediately: `docker compose logs api` shows the config
+  validation error (secrets are never printed). A `cors_origins` parse error
+  means the JSON list is malformed or unquoted.
+- `/health/ready` is 503: DB or Redis unreachable; liveness stays 200 and the
+  API reconnects automatically when they return.
+- `/metrics` is 401: missing/incorrect bearer token.
+- Docker build slow/fails on pip downloads: network to PyPI; the Dockerfile uses
+  retries/timeouts, re-run the build.
 
-# Verify health
-curl -s https://your-domain.com/health | python -m json.tool
-curl -s https://your-domain.com/health/ready | python -m json.tool
-```
+## 10. Pre-go-live sign-off
 
-### 4. Post-Deployment Smoke Test
-
-```bash
-./scripts/smoke-test.sh https://your-domain.com
-```
-
----
-
-## Blockers Found
-
-**None** - No deployment blockers identified.
-
-### Items Requiring Action
-
-1. **CORS Configuration** - Must update `APP_CORS_ORIGINS` for public domain
-2. **HTTPS Setup** - Must configure SSL/TLS termination
-3. **Secret Generation** - Must generate and securely store JWT secret and database password
-
-### Items Verified
-
-✅ Docker build successful  
-✅ Production compose configuration valid  
-✅ No secrets in version control  
-✅ Health endpoints functional  
-✅ Database migrations ready  
-✅ Frontend serving configured  
-✅ Smoke test passes  
-✅ Production security validation enabled  
-
----
-
-## Final Verdict
-
-**✅ READY FOR PUBLIC CLOUD DEPLOYMENT**
-
-The application can be deployed to public cloud with the configurations outlined above. The main requirements are:
-
-1. Generate and securely store secrets
-2. Configure HTTPS/SSL termination
-3. Update CORS for your public domain
-4. Set up persistent storage for PostgreSQL
-5. Run the deployment smoke test
-
-No code changes are required for deployment.
+- [ ] Secrets generated and stored outside git
+- [ ] Reverse proxy with TLS in place, `/metrics` restricted
+- [ ] Smoke test passes against the real URL
+- [ ] OpenAI path verified with real credentials (if used)
+- [ ] Backup taken and restore tested
+- [ ] GitHub Actions workflow green on `main`

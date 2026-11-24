@@ -4,7 +4,7 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.db.models.chunk_embedding import ChunkEmbedding
 from app.db.models.document import Document
 from app.db.models.document_chunk import DocumentChunk
+from app.services.provider_errors import ProviderError, translate_openai_error
 
 
 @dataclass(slots=True)
@@ -137,12 +138,24 @@ class EmbeddingService:
         if not self.settings.openai_api_key:
             raise RuntimeError("OpenAI API key not configured")
 
-        client = openai.AsyncOpenAI(api_key=self.settings.openai_api_key)
-        response = await client.embeddings.create(
-            model=self.settings.embedding_model,
-            input=texts,
+        client = openai.AsyncOpenAI(
+            api_key=self.settings.openai_api_key,
+            timeout=self.settings.llm_timeout,
         )
-        return [data.embedding for data in response.data]
+        try:
+            response = await client.embeddings.create(
+                model=self.settings.embedding_model,
+                input=texts,
+            )
+        except Exception as exc:
+            raise translate_openai_error(exc) or exc from None
+        vectors = [data.embedding for data in response.data]
+        if any(len(v) != self._dimension for v in vectors):
+            raise ProviderError(
+                502,
+                "Embedding dimension mismatch; check APP_EMBEDDING_DIMENSION.",
+            )
+        return vectors
 
     async def _generate_local_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings using a local model."""
@@ -225,21 +238,17 @@ async def search_similar_chunks(
     if not query_embedding:
         return []
 
+    distance = ChunkEmbedding.embedding.cosine_distance(query_embedding)
     result = await session.execute(
         select(DocumentChunk)
         .join(ChunkEmbedding, DocumentChunk.id == ChunkEmbedding.chunk_id)
         .where(DocumentChunk.user_id == user_id)
         .where(ChunkEmbedding.embedding_model == get_settings().embedding_model)
-        .where(
-            text("1 - (chunk_embeddings.embedding <=> :query_embedding) >= :threshold")
-        )
+        .where(ChunkEmbedding.embedding_dimension == len(query_embedding))
+        .where(1 - distance >= similarity_threshold)
         .options(selectinload(DocumentChunk.document))
-        .order_by(text("chunk_embeddings.embedding <=> :query_embedding"))
+        .order_by(distance)
         .limit(limit)
-        .params(
-            query_embedding=query_embedding,
-            threshold=similarity_threshold,
-        )
     )
     return list(result.scalars().all())
 

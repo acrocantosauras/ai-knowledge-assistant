@@ -41,6 +41,15 @@ def _create_limiter():
         key_func=_get_client_ip,
         default_limits=[settings.rate_limit_default],
         storage_uri=storage,
+        storage_options=(
+            {"socket_connect_timeout": 2, "socket_timeout": 2}
+            if storage != "memory://"
+            else {}
+        ),
+        # If Redis is down, degrade to per-process in-memory limits instead
+        # of failing every request with a 500.
+        swallow_errors=True,
+        in_memory_fallback_enabled=True,
     )
 
 

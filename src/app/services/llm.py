@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.config import get_settings
+from app.services.provider_errors import translate_openai_error
 
 logger = logging.getLogger(__name__)
 
@@ -205,12 +206,15 @@ class OpenAIProvider(BaseLLMProvider):
             api_key=self.settings.openai_api_key,
             timeout=self.settings.llm_timeout,
         )
-        response = await client.chat.completions.create(
-            model=self.settings.llm_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature or self.settings.llm_temperature,
-            max_tokens=max_tokens or self.settings.llm_max_tokens,
-        )
+        try:
+            response = await client.chat.completions.create(
+                model=self.settings.llm_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature or self.settings.llm_temperature,
+                max_tokens=max_tokens or self.settings.llm_max_tokens,
+            )
+        except Exception as exc:
+            raise translate_openai_error(exc) or exc from None
         choice = response.choices[0]
         return LLMResponse(
             content=choice.message.content or "",
@@ -254,12 +258,15 @@ class OpenAIProvider(BaseLLMProvider):
         else:
             messages.append({"role": "user", "content": user_message})
 
-        response = await client.chat.completions.create(
-            model=self.settings.llm_model,
-            messages=messages,
-            temperature=temperature or self.settings.llm_temperature,
-            max_tokens=max_tokens or self.settings.llm_max_tokens,
-        )
+        try:
+            response = await client.chat.completions.create(
+                model=self.settings.llm_model,
+                messages=messages,
+                temperature=temperature or self.settings.llm_temperature,
+                max_tokens=max_tokens or self.settings.llm_max_tokens,
+            )
+        except Exception as exc:
+            raise translate_openai_error(exc) or exc from None
         choice = response.choices[0]
         return LLMResponse(
             content=choice.message.content or "",
@@ -306,9 +313,11 @@ class OpenAIProvider(BaseLLMProvider):
                 if delta and delta.content:
                     yield StreamingChunk(content=delta.content)
             yield StreamingChunk(content="", is_final=True)
-        except Exception:  # noqa: BLE001
-            logger.exception("OpenAI streaming failed")
-            raise RuntimeError("LLM streaming failed") from None
+        except Exception as exc:  # noqa: BLE001
+            logger.error("OpenAI streaming failed (%s)", type(exc).__name__)
+            raise translate_openai_error(exc) or RuntimeError(
+                "LLM streaming failed"
+            ) from None
 
     async def generate_with_context_stream(
         self,
@@ -359,9 +368,13 @@ class OpenAIProvider(BaseLLMProvider):
                 if delta and delta.content:
                     yield StreamingChunk(content=delta.content)
             yield StreamingChunk(content="", is_final=True)
-        except Exception:  # noqa: BLE001
-            logger.exception("OpenAI streaming with context failed")
-            raise RuntimeError("LLM streaming failed") from None
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "OpenAI streaming with context failed (%s)", type(exc).__name__
+            )
+            raise translate_openai_error(exc) or RuntimeError(
+                "LLM streaming failed"
+            ) from None
 
 
 class LLMService:

@@ -152,6 +152,7 @@ async def ask_question_stream_endpoint(
         question_message = None
         answer_message = None
         full_answer = ""
+        captured_sources: list = []
         stream_start_time = time.monotonic()
 
         try:
@@ -207,6 +208,9 @@ async def ask_question_stream_endpoint(
                 chunk_data = StreamingResponseSchema(**chunk)
                 yield f"data: {chunk_data.model_dump_json()}\n\n"
 
+                if chunk.get("type") == "sources":
+                    captured_sources = chunk.get("sources") or []
+
                 # Accumulate answer content
                 if chunk.get("type") == "answer":
                     content = chunk.get("content", "")
@@ -224,7 +228,7 @@ async def ask_question_stream_endpoint(
                             token_count=None,  # Will be updated after
                             metadata={
                                 "type": "answer",
-                                "sources": chunk.get("sources", []),
+                                "sources": chunk.get("sources") or captured_sources,
                                 "provider": chunk.get("provider", "unknown"),
                                 "model": chunk.get("model", "unknown"),
                             },

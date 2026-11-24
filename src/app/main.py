@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,6 +27,7 @@ from app.core.redis import (
 )
 from app.db.session import async_session_factory
 from app.logging_config import configure_logging
+from app.services.provider_errors import ProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -137,11 +138,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings)
+    is_prod = settings.environment in ("production", "staging")
 
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
         lifespan=lifespan,
+        docs_url=None if is_prod else "/docs",
+        redoc_url=None if is_prod else "/redoc",
+        openapi_url=None if is_prod else "/openapi.json",
     )
 
     # Middleware (order matters — first added = outermost)
@@ -168,6 +173,16 @@ def create_app() -> FastAPI:
     # Global exception handler — prevents raw stack traces from
     # leaking to API clients for truly unexpected errors.
     _global_logger = logging.getLogger(__name__)
+
+    @app.exception_handler(ProviderError)
+    async def _provider_error_handler(
+        request: Request,
+        exc: ProviderError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.public_detail},
+        )
 
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(
@@ -225,7 +240,9 @@ def create_app() -> FastAPI:
         index_file = static_dir / "index.html"
         if index_file.is_file():
 
-            async def _spa_fallback() -> FileResponse:
+            async def _spa_fallback(full_path: str) -> FileResponse:
+                if full_path.startswith(("api/", "health", "metrics")):
+                    raise HTTPException(status_code=404, detail="Not Found")
                 return FileResponse(str(index_file))
 
             app.add_api_route(

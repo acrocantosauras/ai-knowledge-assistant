@@ -8,6 +8,7 @@
 #   ./scripts/smoke-test.sh [BASE_URL]
 #
 # Default BASE_URL is http://localhost:8000
+# Set METRICS_TOKEN=<APP_METRICS_TOKEN> when /metrics is token-protected.
 #
 # Requirements: bash, curl, docker compose (for container health checks)
 # =============================================================================
@@ -73,8 +74,8 @@ if command -v docker &>/dev/null && docker compose ps &>/dev/null 2>&1; then
         fail "Container '$svc' status: $status"
       fi
     else
-      # Fallback: just check if docker compose has the service
-      pass "Container '$svc' configured in compose"
+      # Not counted as a pass: the container was not actually observed.
+      echo "  (container '$svc' not found in this compose project - skipped; set COMPOSE_PROJECT_NAME)"
     fi
   done
 else
@@ -107,7 +108,17 @@ fi
 
 section "3. Metrics"
 
-status=$(http_status GET "$BASE_URL/metrics")
+METRICS_AUTH=()
+if [ -n "${METRICS_TOKEN:-}" ]; then
+  METRICS_AUTH=(-H "Authorization: Bearer $METRICS_TOKEN")
+  status=$(http_status GET "$BASE_URL/metrics")
+  if [ "$status" = "401" ]; then
+    pass "GET /metrics without token -> 401"
+  else
+    fail "GET /metrics without token -> $status (expected 401)"
+  fi
+fi
+status=$(http_status GET "$BASE_URL/metrics" "${METRICS_AUTH[@]}")
 if [ "$status" = "200" ]; then
   pass "GET /metrics → 200"
 else
@@ -115,7 +126,7 @@ else
 fi
 
 # Verify it contains Prometheus format
-body=$(curl -s "$BASE_URL/metrics" 2>/dev/null)
+body=$(curl -s "${METRICS_AUTH[@]}" "$BASE_URL/metrics" 2>/dev/null)
 if echo "$body" | grep -q "http_requests_total"; then
   pass "Metrics contain http_requests_total"
 else

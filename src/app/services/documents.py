@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 from pathlib import Path
 from uuid import UUID
 
@@ -81,7 +82,7 @@ def _read_text_from_upload(file_bytes: bytes, filename: str) -> str:
                 detail="PDF support is unavailable in this environment.",
             ) from exc
 
-        reader = PdfReader(bytes(file_bytes))
+        reader = PdfReader(io.BytesIO(file_bytes))
         pages = [page.extract_text() or "" for page in reader.pages]
         return "\n".join(pages)
     if suffix == ".docx":
@@ -93,7 +94,7 @@ def _read_text_from_upload(file_bytes: bytes, filename: str) -> str:
                 detail="DOCX support is unavailable in this environment.",
             ) from exc
 
-        doc = DocxDocument(file_bytes)
+        doc = DocxDocument(io.BytesIO(file_bytes))
         return "\n".join(paragraph.text for paragraph in doc.paragraphs)
 
     raise HTTPException(
@@ -110,7 +111,7 @@ def extract_pdf_metadata(file_bytes: bytes) -> dict:
         return {}
 
     try:
-        reader = PdfReader(bytes(file_bytes))
+        reader = PdfReader(io.BytesIO(file_bytes))
         meta = reader.metadata
         if not meta:
             return {}
@@ -138,7 +139,7 @@ def extract_docx_metadata(file_bytes: bytes) -> dict:
         return {}
 
     try:
-        doc = DocxDocument(file_bytes)
+        doc = DocxDocument(io.BytesIO(file_bytes))
         props: CoreProperties = doc.core_properties
 
         return {
@@ -186,14 +187,27 @@ async def upload_document(
 
     _validate_file(file)
 
-    file_bytes = await file.read()
+    file_bytes = await file.read(MAX_FILE_SIZE_BYTES + 1)
+    if len(file_bytes) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File too large. Maximum size is 10 MB.",
+        )
     if not file_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded file is empty.",
         )
 
-    text = _read_text_from_upload(file_bytes, file.filename)
+    try:
+        text = _read_text_from_upload(file_bytes, file.filename)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Uploaded file could not be parsed.",
+        ) from exc
     if not text.strip():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

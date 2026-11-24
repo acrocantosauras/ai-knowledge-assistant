@@ -116,6 +116,32 @@ docker compose up --build
 | `APP_RATE_LIMIT_QA` | `20/minute` | QA endpoint limit |
 | `APP_REDIS_URL` | — | Redis URL (optional, for distributed rate limiting) |
 
+## Production Deployment
+
+**Architecture:** one `api` container (FastAPI + built React SPA on port 8000), a one-shot `migrate` container (`alembic upgrade head`, must succeed before `api` starts), `postgres` (pgvector 0.8.0 / PG16) and `redis` (7.4.1). Postgres and Redis are not published to the host in production.
+
+**Prerequisites:** Docker Engine 24+ with Compose v2.24+ (for `!reset`), a TLS-terminating reverse proxy in front of port 8000.
+
+**Required variables** (no defaults; compose refuses to start without them): `POSTGRES_PASSWORD`, `APP_JWT_SECRET_KEY` (>= 32 chars), `APP_METRICS_TOKEN` (>= 16 chars), `APP_CORS_ORIGINS` (JSON list, no `*`). With `APP_ENVIRONMENT=production` the app also refuses the default dev DB password or placeholder secret. Interactive docs (`/docs`) are disabled in production. Optional: `APP_LLM_PROVIDER`/`APP_EMBEDDING_PROVIDER` (`mock` or `openai`; `openai` requires `APP_OPENAI_API_KEY`), `APP_REDIS_URL`, rate-limit settings. See `.env.production.example` and the table below.
+
+```powershell
+cp .env.production.example .env.production
+python -c "import secrets; print(secrets.token_urlsafe(64))"   # APP_JWT_SECRET_KEY
+python -c "import secrets; print(secrets.token_hex(24))"       # POSTGRES_PASSWORD
+```
+
+```powershell
+docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+Migrations run automatically via the `migrate` service; to run them manually: `docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml run --rm migrate`.
+
+**Verify:** `curl localhost:8000/health/ready`, then `METRICS_TOKEN=<token> COMPOSE_PROJECT_NAME=<project> bash scripts/smoke-test.sh http://localhost:8000` (creates and deletes a test user's document).
+
+**Notes:** TLS is not handled by the app; terminate it in a reverse proxy (`deploy/nginx.example.conf`). `/metrics` requires `Authorization: Bearer $APP_METRICS_TOKEN` and should also be network-restricted (`deploy/prometheus.example.yml`). See `DEPLOYMENT_CHECKLIST.md` and `DEPLOYMENT_READINESS_SUMMARY.md` for verified status and known limitations. Rate limiting keys on the client IP; behind a proxy ensure the real IP is forwarded. Back up the `postgres_data` volume (see Backup & Recovery below) and keep `.env.production` out of git.
+
+**Troubleshooting:** `migrate` exits non-zero -> `docker compose logs migrate`; `api` exits at start -> config validation message in `docker compose logs api` (secrets are never logged); `/health/ready` 503 -> database or Redis unreachable.
+
 ## Database
 
 ### Migrations

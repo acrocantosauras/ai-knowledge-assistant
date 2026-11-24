@@ -1,294 +1,57 @@
-# AI Knowledge Assistant - Deployment Readiness Summary
-
-## Executive Summary
-
-✅ **The application is ready for public cloud deployment** with no code changes required. The checklist below identifies the required configurations and actions.
-
----
-
-## Production Environment Variables Required
-
-### Mandatory (Must Set)
-
-```bash
-APP_ENVIRONMENT=production
-APP_JWT_SECRET_KEY=<generate-with-python>
-APP_DATABASE_URL=postgresql+asyncpg://ai_knowledge_user:<password>@postgres:5432/ai_knowledge_assistant
-POSTGRES_DB=ai_knowledge_assistant
-POSTGRES_USER=ai_knowledge_user
-POSTGRES_PASSWORD=<strong-password>
-APP_CORS_ORIGINS=["https://your-domain.com"]
-```
-
-### Optional (Can Use Defaults)
-
-```bash
-APP_LOG_LEVEL=INFO
-APP_LLM_PROVIDER=mock  # or "openai" with API key
-APP_RATE_LIMIT_DEFAULT=60/minute
-APP_RATE_LIMIT_AUTH=10/minute
-APP_RATE_LIMIT_UPLOAD=20/hour
-APP_RATE_LIMIT_RAG=30/minute
-APP_RATE_LIMIT_QA=20/minute
-```
-
----
-
-## Secrets That Need to Be Generated
-
-### 1. JWT Secret Key (64+ characters)
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(64))"
-```
-
-### 2. Database Password (32+ characters)
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
-### 3. OpenAI API Key (if using OpenAI LLM)
-- Obtain from OpenAI dashboard
-
----
-
-## Services Required
-
-| Service | Purpose | Required |
-|---------|---------|----------|
-| **API** | FastAPI backend serving frontend | ✅ |
-| **PostgreSQL + pgvector** | Database with vector search | ✅ |
-| **Redis** | Rate limiting & caching | Optional |
-
----
-
-## Deployment Sequence
-
-### Phase 1: Pre-Deployment
-1. ✅ Generate secrets (JWT, database password)
-2. ✅ Configure DNS for your domain
-3. ✅ Set up HTTPS/SSL termination
-4. ✅ Update CORS for your domain
-5. ✅ Set up persistent storage (PostgreSQL volume)
-
-### Phase 2: Deployment
-```bash
-# 1. Clone repository
-git clone <repo-url>
-cd ai-knowledge-assistant
-
-# 2. Create production environment file
-cp .env.example .env.production
-# Edit .env.production with your values
-
-# 3. Build and start services
-docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  --env-file .env.production up -d --build
-
-# 4. Run database migrations
-docker compose exec api alembic upgrade head
-
-# 5. Verify health
-curl -s https://your-domain.com/health | python -m json.tool
-curl -s https://your-domain.com/health/ready | python -m json.tool
-```
-
-### Phase 3: Post-Deployment
-```bash
-# Run smoke test
-./scripts/smoke-test.sh https://your-domain.com
-
-# Monitor logs
-docker compose logs -f api
-```
-
----
-
-## DNS/Domain Requirements
-
-### Required DNS Records
-
-```
-Type    Name                    Value           TTL
-A       your-domain.com         <server-ip>     300
-CNAME   www.your-domain.com     your-domain.com 300
-```
-
-### Domain Configuration
-
-- Point domain to your server/load balancer
-- Configure SSL/TLS certificate
-- Update CORS origins to include your domain
-
----
-
-## HTTPS Requirements
-
-### Implementation Options
-
-1. **Cloud Load Balancer** (Recommended)
-   - AWS ALB with ACM
-   - GCP Load Balancer with managed SSL
-   - Azure Application Gateway
-
-2. **Nginx/Caddy Reverse Proxy**
-   - Terminate SSL at proxy
-   - Forward to API on port 8000
-
-3. **Docker with SSL**
-   - Mount SSL certificates
-   - Configure uvicorn with SSL
-
-### Minimum HTTPS Configuration
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name your-domain.com;
-    
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-    
-    location / {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
----
-
-## CORS Requirements
-
-### Current Configuration (Development Only)
-
-```bash
-APP_CORS_ORIGINS=["http://localhost:3000","http://localhost:5173"]
-```
-
-### Production Configuration (Required)
-
-```bash
-APP_CORS_ORIGINS=["https://your-domain.com","http://localhost:3000"]
-```
-
-### Why This Matters
-
-- Frontend makes API calls to your domain
-- CORS prevents unauthorized cross-origin requests
-- Must include your production domain
-
----
-
-## Exact Deployment Commands
-
-### Complete Deployment Script
-
-```bash
-#!/bin/bash
-set -e
-
-DOMAIN="your-domain.com"
-ENV_FILE=".env.production"
-
-echo "=== AI Knowledge Assistant Deployment ==="
-
-# Step 1: Generate secrets (run once)
-echo "Generating secrets..."
-JWT_SECRET=$(python -c "import secrets; print(secrets.token_urlsafe(64))")
-DB_PASSWORD=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
-
-# Step 2: Create environment file
-cat > $ENV_FILE << EOF
-APP_ENVIRONMENT=production
-APP_JWT_SECRET_KEY=$JWT_SECRET
-APP_DATABASE_URL=postgresql+asyncpg://ai_knowledge_user:$DB_PASSWORD@postgres:5432/ai_knowledge_assistant
-POSTGRES_DB=ai_knowledge_assistant
-POSTGRES_USER=ai_knowledge_user
-POSTGRES_PASSWORD=$DB_PASSWORD
-APP_CORS_ORIGINS=["https://$DOMAIN"]
-APP_LOG_LEVEL=INFO
-EOF
-
-echo "Environment file created: $ENV_FILE"
-
-# Step 3: Build and start services
-echo "Building and starting services..."
-docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  --env-file $ENV_FILE up -d --build
-
-# Step 4: Wait for services to be ready
-echo "Waiting for services to be ready..."
-sleep 10
-
-# Step 5: Run database migrations
-echo "Running database migrations..."
-docker compose exec api alembic upgrade head
-
-# Step 6: Verify health
-echo "Verifying health..."
-curl -sf https://$DOMAIN/health > /dev/null && echo "✅ Health check passed" || echo "❌ Health check failed"
-curl -sf https://$DOMAIN/health/ready > /dev/null && echo "✅ Readiness check passed" || echo "❌ Readiness check failed"
-
-# Step 7: Run smoke test
-echo "Running smoke test..."
-./scripts/smoke-test.sh https://$DOMAIN
-
-echo "=== Deployment Complete ==="
-```
-
----
-
-## Post-Deployment Smoke Test Command
-
-```bash
-# Against public URL
-./scripts/smoke-test.sh https://your-domain.com
-
-# Expected output
-# Results: 25/25 passed, 0 failed
-# ✓ SMOKE TEST PASSED
-```
-
----
-
-## Any Blockers Found
-
-### ❌ No Code Blockers
-
-The application is ready for deployment without code changes.
-
-### ⚠️ Configuration Required
-
-1. **CORS must be updated** for your public domain
-2. **HTTPS must be configured** (not provided by application)
-3. **Secrets must be generated** and securely stored
-4. **DNS must be configured** to point to your server
-
-### ✅ Verified Working
-
-- Docker build successful
-- Production compose configuration valid
-- No secrets in version control
-- Health endpoints functional
-- Database migrations ready
-- Frontend serving configured
-- Smoke test passes locally
-
----
-
-## Final Verdict
-
-**✅ READY FOR PUBLIC CLOUD DEPLOYMENT**
-
-The application can be deployed to any public cloud provider (AWS, GCP, Azure, etc.) with the configurations outlined above. The main requirements are:
-
-1. Generate and securely store secrets
-2. Configure HTTPS/SSL termination
-3. Update CORS for your public domain
-4. Set up persistent storage for PostgreSQL
-5. Run the deployment smoke test
-
-**No code changes are required for deployment.**
+# Deployment Readiness Summary
+
+Status as of the last validation run (2026-11-24, Windows + Docker Desktop, isolated compose project `aika-prodtest`).
+
+**Verdict: deployable for a controlled production rollout once the items under "Manual configuration required" are done. Real OpenAI providers and GitHub Actions have NOT been executed, so they are not claimed as verified.**
+
+## Verification results
+
+| Area | Status | Evidence |
+|---|---|---|
+| Backend tests | PASS | `pytest`: 186 passed (real PostgreSQL + pgvector) |
+| Lint / format | PASS | `ruff check` and `ruff format --check` clean |
+| Frontend | PASS | oxlint clean, `tsc -b` clean, vitest 15/15, `vite build` OK |
+| Docker build, non-root, read-only FS | PASS | image builds; runs as uid 1000; `touch /app/x` fails; txt/docx/PDF uploads work with `read_only: true`, `cap_drop: ALL` |
+| Migrations | PASS | `migrate` one-shot service applies 3 migrations in order on an empty DB; API starts only after it exits 0 |
+| Smoke test | PASS | `scripts/smoke-test.sh`: 26/26 against the production stack |
+| Metrics security | PASS | no token -> 401, wrong token -> 401, correct token -> 200, `/health*` unaffected |
+| Auth / ingestion / RAG / citations | PASS | automated tests + smoke test (mock providers) |
+| Streaming SSE | PASS | `tests/test_metrics_auth_and_providers.py`: event order (sources -> chunks -> final), citations persisted, error events sanitized, client disconnect safe |
+| pgvector | PASS | `tests/test_pgvector.py` against PostgreSQL: extension, vector column, insert, cosine ranking, threshold, per-user scope, dimension mismatch |
+| Container reliability | PASS | `scripts/reliability-test.sh`: 17/17 (restart, Redis outage, Postgres outage, recreate with persisted data, SIGTERM exit 0) |
+| OpenAI providers (real API) | NEEDS CONFIGURATION | no API key available. Error translation (invalid key, rate limit, timeout, server error, dimension mismatch) is covered by tests using *simulated* SDK errors only |
+| GitHub Actions | NOT RUN | `ci.yml` parses as valid YAML; workflow never executed |
+| TLS | NOT PROVIDED BY APP | must be terminated by a reverse proxy / load balancer |
+
+## Defects found and fixed during validation
+
+- Docker image could not build the frontend (Vite 8 needs Node >= 20.19; image used 20.18) -> Node 22.12.
+- No migrations ran on deploy -> `migrate` service.
+- `openai` was not a declared dependency, so the OpenAI providers could never work in the image -> added.
+- pgvector similarity search passed a Python list into raw SQL and failed under asyncpg; **semantic search with a real embedding provider never worked** -> rewritten with pgvector's cosine-distance operator.
+- Searching with a different embedding dimension would raise a SQL error -> filtered by dimension.
+- Redis outage turned every request (including `/health`) into a 500 -> rate limiter now falls back to in-memory.
+- PDF/DOCX extraction passed raw bytes to the parsers; corrupt/non-UTF-8/oversize uploads returned 500 or buffered unbounded data -> fixed (422/413).
+- Streaming answers did not persist their citations -> persisted.
+- `/metrics` was public -> bearer token required in production.
+- Provider failures leaked as generic 500s -> mapped to 429/502/504 with sanitized messages.
+
+## Known limitations
+
+- With `APP_EMBEDDING_PROVIDER=mock` (the default), retrieval is a plain substring (`ILIKE`) match of the whole question, not semantic search. Use `openai` embeddings for real semantic retrieval.
+- The `embedding` column is an unconstrained `vector`, so there is no HNSW/IVFFlat index; similarity search is a sequential scan per user. Fine for small corpora, slow at scale.
+- Changing `APP_EMBEDDING_MODEL`/dimension requires re-ingesting documents (old vectors are ignored, not migrated).
+- Rate limits are per client IP. Behind a proxy, set `FORWARDED_ALLOW_IPS` for uvicorn to the proxy address, otherwise all users share the proxy's IP. In-memory fallback limits are per process.
+- `/metrics` token protection is a single shared bearer token; no rotation mechanism beyond redeploying.
+- No refresh tokens / token revocation: JWTs are valid until expiry (30 min default).
+- Single `api` replica tested; multi-replica behaviour not tested.
+- Uploads are processed synchronously in the request (10 MB cap).
+- Backups are manual (`pg_dump`); restore procedure documented but a full restore drill was not executed.
+
+## Manual configuration required
+
+1. Create `.env.production` from `.env.production.example` with strong `POSTGRES_PASSWORD`, `APP_JWT_SECRET_KEY` (>= 32 chars), `APP_METRICS_TOKEN` (>= 16 chars), `APP_CORS_ORIGINS`.
+2. Put a TLS-terminating reverse proxy in front (see `deploy/nginx.example.conf`) and restrict `/metrics`.
+3. For real AI answers: set `APP_LLM_PROVIDER=openai`, `APP_EMBEDDING_PROVIDER=openai`, `APP_OPENAI_API_KEY`, then run a real-provider check (see checklist section 6).
+4. Schedule database backups and test a restore.
+5. Run the GitHub Actions workflow once and confirm it is green.

@@ -3,8 +3,10 @@ services:
     build:
       context: .
     environment:
-      APP_DATABASE_URL: postgresql+asyncpg://ai_knowledge_user:ai_knowledge_password@postgres:5432/ai_knowledge_assistant
+      APP_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ai_knowledge_user}:${POSTGRES_PASSWORD:-ai_knowledge_password}@postgres:5432/${POSTGRES_DB:-ai_knowledge_assistant}
       APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
+      APP_OPENAI_API_KEY: ${APP_OPENAI_API_KEY:-}
+      APP_METRICS_TOKEN: ${APP_METRICS_TOKEN:-}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
       APP_JWT_SECRET_KEY: ${APP_JWT_SECRET_KEY:-change-me-to-a-random-secret-key}
       APP_EMBEDDING_PROVIDER: ${APP_EMBEDDING_PROVIDER:-mock}
@@ -14,10 +16,11 @@ services:
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
       interval: 10s
@@ -25,8 +28,22 @@ services:
       retries: 5
       start_period: 15s
 
+  # One-shot job: applies Alembic migrations before the API starts.
+  migrate:
+    build:
+      context: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      APP_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ai_knowledge_user}:${POSTGRES_PASSWORD:-ai_knowledge_password}@postgres:5432/${POSTGRES_DB:-ai_knowledge_assistant}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
+      APP_JWT_SECRET_KEY: ${APP_JWT_SECRET_KEY:-change-me-to-a-random-secret-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.0-pg16
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ai_knowledge_assistant}
       POSTGRES_USER: ${POSTGRES_USER:-ai_knowledge_user}
@@ -47,7 +64,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.1-alpine
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:

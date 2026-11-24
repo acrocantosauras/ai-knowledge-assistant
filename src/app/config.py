@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     # Redis (optional — used for rate limiting storage and caching)
     redis_url: str = ""
 
+    # Bearer token required for GET /metrics (mandatory in production)
+    metrics_token: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -87,6 +90,22 @@ class Settings(BaseSettings):
                     " value in production."
                     " Generate: python -c 'import secrets;"
                     " print(secrets.token_urlsafe(64))'"
+                )
+            if len(self.jwt_secret_key) < 32:
+                raise ValueError(
+                    "APP_JWT_SECRET_KEY must be at least 32 characters in production."
+                )
+            if len(self.metrics_token) < 16:
+                raise ValueError(
+                    "APP_METRICS_TOKEN must be at least 16 characters in"
+                    " production (Prometheus scrapes /metrics with it)."
+                )
+            if "*" in self.cors_origins:
+                raise ValueError("APP_CORS_ORIGINS must not contain '*' in production.")
+            if "ai_knowledge_password" in self.database_url:
+                raise ValueError(
+                    "APP_DATABASE_URL uses the default development password;"
+                    " set a strong POSTGRES_PASSWORD in production."
                 )
             if self.embedding_provider == "openai" and not self.openai_api_key:
                 raise ValueError(
