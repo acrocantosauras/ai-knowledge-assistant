@@ -2,7 +2,7 @@
 
 Status as of the last validation run (2026-11-24, Windows + Docker Desktop, isolated compose project `aika-prodtest`).
 
-**Verdict: deployable for a controlled production rollout once the items under "Manual configuration required" are done. Real OpenAI providers and GitHub Actions have NOT been executed, so they are not claimed as verified.**
+**Verdict: deployable for a controlled production rollout once the items under "Manual configuration required" are done. Real OpenAI providers have NOT been executed, so they are not claimed as verified. GitHub Actions passed on commit `35ae59e` (run 45377009021, all 7 jobs).**
 
 ## Verification results
 
@@ -20,7 +20,7 @@ Status as of the last validation run (2026-11-24, Windows + Docker Desktop, isol
 | pgvector | PASS | `tests/test_pgvector.py` against PostgreSQL: extension, vector column, insert, cosine ranking, threshold, per-user scope, dimension mismatch |
 | Container reliability | PASS | `scripts/reliability-test.sh`: 17/17 (restart, Redis outage, Postgres outage, recreate with persisted data, SIGTERM exit 0) |
 | OpenAI providers (real API) | NEEDS CONFIGURATION | no API key available. Error translation (invalid key, rate limit, timeout, server error, dimension mismatch) is covered by tests using *simulated* SDK errors only |
-| GitHub Actions | NOT RUN | `ci.yml` parses as valid YAML; workflow never executed |
+| GitHub Actions | PASS | Run 45377009021 on `35ae59e`: frontend lint/typecheck/tests/build, Ruff, pytest, and the Docker build + compose validation + prod-config check + migrations + smoke test + API restart recovery job all succeeded |
 | TLS | NOT PROVIDED BY APP | must be terminated by a reverse proxy / load balancer |
 
 ## Defects found and fixed during validation
@@ -54,4 +54,4 @@ Status as of the last validation run (2026-11-24, Windows + Docker Desktop, isol
 2. Put a TLS-terminating reverse proxy in front (see `deploy/nginx.example.conf`) and restrict `/metrics`.
 3. For real AI answers: set `APP_LLM_PROVIDER=openai`, `APP_EMBEDDING_PROVIDER=openai`, `APP_OPENAI_API_KEY`, then run a real-provider check (see checklist section 6).
 4. Schedule database backups and test a restore.
-5. Run the GitHub Actions workflow once and confirm it is green.
+5. Keep the GitHub Actions workflow green on `main` (last verified green on `35ae59e`).

@@ -124,4 +124,4 @@ before relying on backups.
 - [ ] Smoke test passes against the real URL
 - [ ] OpenAI path verified with real credentials (if used)
 - [ ] Backup taken and restore tested
-- [ ] GitHub Actions workflow green on `main`
+- [x] GitHub Actions workflow green on `main` (verified on `35ae59e`; re-check after each change)
